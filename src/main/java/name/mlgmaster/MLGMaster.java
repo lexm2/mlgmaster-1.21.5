@@ -12,7 +12,7 @@ public class MLGMaster implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		// Register tick event
+		// Register tick event with cached client reference
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			if (client != null && client.player != null && client.world != null) {
 				WaterMLGHandler.onHighFrequencyTick();
@@ -21,8 +21,11 @@ public class MLGMaster implements ModInitializer {
 
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ScaffoldingCrouchManager.forceReleaseCrouch();
+			// Also stop any active fall tracking when disconnecting
+			WaterMLGHandler.forceStopTracking();
 		});
 
 		LOGGER.info("WaterMLG mod initialized successfully!");
 	}
+
 }

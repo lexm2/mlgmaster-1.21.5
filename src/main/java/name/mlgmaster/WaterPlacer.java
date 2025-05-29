@@ -1,5 +1,6 @@
 package name.mlgmaster;
 
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.Hand;
@@ -7,7 +8,6 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.block.Blocks;
 
 public class WaterPlacer {
 
@@ -32,58 +32,43 @@ public class WaterPlacer {
 
                 // Get placement details from the shared prediction
                 BlockPos targetLandingBlock = prediction.getHighestLandingBlock();
-                Vec3d waterPlacementTarget = prediction.getWaterPlacementTarget();
-                BlockPos waterPlacementPos = targetLandingBlock.up();
+                BlockPos initialWaterPlacementPos = targetLandingBlock.up();
 
-                MLGMaster.LOGGER.info("Placement target details:");
+                MLGMaster.LOGGER.info("Initial placement target details:");
                 MLGMaster.LOGGER.info("  Landing block: {} at ({}, {}, {})", targetLandingBlock,
                                 targetLandingBlock.getX(), targetLandingBlock.getY(),
                                 targetLandingBlock.getZ());
                 MLGMaster.LOGGER.info("  Initial water position: {} at ({}, {}, {})",
-                                waterPlacementPos, waterPlacementPos.getX(),
-                                waterPlacementPos.getY(), waterPlacementPos.getZ());
+                                initialWaterPlacementPos, initialWaterPlacementPos.getX(),
+                                initialWaterPlacementPos.getY(), initialWaterPlacementPos.getZ());
 
-                // Check if placement location is clear, if not, place water on top of the blocking
-                // block
-                var blockAtPlacement = client.world.getBlockState(waterPlacementPos);
-                if (blockAtPlacement.getBlock() != Blocks.AIR) {
-                        MLGMaster.LOGGER.info("Placement location {} is not air: {}",
-                                        waterPlacementPos, blockAtPlacement.getBlock());
-                        MLGMaster.LOGGER.info(
-                                        "Adjusting placement to place water on top of blocking block");
+                // Find the first clear air block above the landing block (recursive)
+                WaterPlacementLocation placementLocation = findClearWaterPlacement(client,
+                                targetLandingBlock, initialWaterPlacementPos, 0);
 
-                        // Place water on top of the blocking block
-                        targetLandingBlock = waterPlacementPos; // The blocking block becomes our
-                                                                // new landing block
-                        waterPlacementPos = targetLandingBlock.up(); // Place water on top of it
-                        waterPlacementTarget = Vec3d.ofCenter(waterPlacementPos); // Update target
-
-                        MLGMaster.LOGGER.info("Adjusted placement details:");
-                        MLGMaster.LOGGER.info("  New landing block: {} at ({}, {}, {})",
-                                        targetLandingBlock, targetLandingBlock.getX(),
-                                        targetLandingBlock.getY(), targetLandingBlock.getZ());
-                        MLGMaster.LOGGER.info("  New water position: {} at ({}, {}, {})",
-                                        waterPlacementPos, waterPlacementPos.getX(),
-                                        waterPlacementPos.getY(), waterPlacementPos.getZ());
-
-                        // Check if the new position is clear
-                        var newBlockAtPlacement = client.world.getBlockState(waterPlacementPos);
-                        if (newBlockAtPlacement.getBlock() != Blocks.AIR) {
-                                MLGMaster.LOGGER.warn(
-                                                "Adjusted placement location {} is also not air: {}",
-                                                waterPlacementPos, newBlockAtPlacement.getBlock());
-                                // If still blocked, try alternatives
-                                return tryAlternativePlacements(client, player, prediction);
-                        }
+                if (placementLocation == null) {
+                        MLGMaster.LOGGER.warn(
+                                        "Could not find a clear location for water placement after checking multiple blocks above landing block");
+                        // Try alternative blocks from the landing result as final fallback
+                        return tryAlternativePlacements(client, player, prediction);
                 }
 
-                MLGMaster.LOGGER.info("Final target center: ({}, {}, {})", waterPlacementTarget.x,
-                                waterPlacementTarget.y, waterPlacementTarget.z);
-                MLGMaster.LOGGER.info("Placement location {} is clear", waterPlacementPos);
+                MLGMaster.LOGGER.info("Final placement location found:");
+                MLGMaster.LOGGER.info("  Water position: {} at ({}, {}, {})",
+                                placementLocation.waterPos, placementLocation.waterPos.getX(),
+                                placementLocation.waterPos.getY(),
+                                placementLocation.waterPos.getZ());
+                MLGMaster.LOGGER.info("  Placement block: {} at ({}, {}, {})",
+                                placementLocation.placementBlock,
+                                placementLocation.placementBlock.getX(),
+                                placementLocation.placementBlock.getY(),
+                                placementLocation.placementBlock.getZ());
+                MLGMaster.LOGGER.info("  Blocks checked above original: {}",
+                                placementLocation.blocksAboveOriginal);
 
-                // Create hit result for placement on the target block
-                BlockHitResult waterPlacementHit =
-                                createHitResult(waterPlacementPos, targetLandingBlock);
+                // Create hit result for placement on the final target block
+                BlockHitResult waterPlacementHit = createHitResult(placementLocation.waterPos,
+                                placementLocation.placementBlock);
 
                 MLGMaster.LOGGER.info("Hit result details:");
                 MLGMaster.LOGGER.info("  Hit position: ({}, {}, {})", waterPlacementHit.getPos().x,
@@ -96,9 +81,71 @@ public class WaterPlacer {
                 MLGMaster.LOGGER.info("  Hit side: {}", waterPlacementHit.getSide());
                 MLGMaster.LOGGER.info("  Is inside: {}", waterPlacementHit.isInsideBlock());
 
+                // Calculate target center for aiming
+                Vec3d waterPlacementTarget = Vec3d.ofCenter(placementLocation.waterPos);
+
                 // Execute placement with precise aim
-                return executePlacementWithAim(client, player, waterPlacementPos, waterPlacementHit,
-                                waterPlacementTarget);
+                return executePlacementWithAim(client, player, placementLocation.waterPos,
+                                waterPlacementHit, waterPlacementTarget);
+        }
+
+        /**
+         * Recursively find a clear air block for water placement by moving up one block at a time
+         */
+        private static WaterPlacementLocation findClearWaterPlacement(MinecraftClient client,
+                        BlockPos originalLandingBlock, BlockPos currentWaterPos,
+                        int blocksChecked) {
+                final int MAX_BLOCKS_TO_CHECK = 10; // Prevent infinite recursion
+
+                MLGMaster.LOGGER.info("Checking water placement at {} (blocks above original: {})",
+                                currentWaterPos, blocksChecked);
+
+                // Safety check to prevent infinite recursion
+                if (blocksChecked >= MAX_BLOCKS_TO_CHECK) {
+                        MLGMaster.LOGGER.warn(
+                                        "Reached maximum blocks to check ({}), stopping recursion",
+                                        MAX_BLOCKS_TO_CHECK);
+                        return null;
+                }
+
+                // Check if current position is air
+                var blockAtCurrentPos = client.world.getBlockState(currentWaterPos);
+                if (blockAtCurrentPos.getBlock() == Blocks.AIR) {
+                        MLGMaster.LOGGER.info(
+                                        "Found clear air block at {} after checking {} blocks above original",
+                                        currentWaterPos, blocksChecked);
+
+                        // Determine which block to place water on top of
+                        BlockPos placementBlock = currentWaterPos.down(); // The block below the air
+                                                                          // block
+
+                        return new WaterPlacementLocation(currentWaterPos, placementBlock,
+                                        blocksChecked);
+                } else {
+                        MLGMaster.LOGGER.info(
+                                        "Position {} is not air (contains: {}), moving up one block",
+                                        currentWaterPos, blockAtCurrentPos.getBlock());
+
+                        // Recursively check the block above
+                        return findClearWaterPlacement(client, originalLandingBlock,
+                                        currentWaterPos.up(), blocksChecked + 1);
+                }
+        }
+
+        /**
+         * Helper class to store water placement location information
+         */
+        private static class WaterPlacementLocation {
+                final BlockPos waterPos; // Where to place the water
+                final BlockPos placementBlock; // Which block to place water on top of
+                final int blocksAboveOriginal; // How many blocks above the original target
+
+                WaterPlacementLocation(BlockPos waterPos, BlockPos placementBlock,
+                                int blocksAboveOriginal) {
+                        this.waterPos = waterPos;
+                        this.placementBlock = placementBlock;
+                        this.blocksAboveOriginal = blocksAboveOriginal;
+                }
         }
 
         /**
@@ -145,26 +192,29 @@ public class WaterPlacer {
                                 continue;
                         }
 
-                        BlockPos altPlacement = altBlock.up();
-                        var blockAtAltPlacement = client.world.getBlockState(altPlacement);
+                        // Try to find a clear placement location above this alternative block
+                        // (recursive)
+                        WaterPlacementLocation altPlacementLocation =
+                                        findClearWaterPlacement(client, altBlock, altBlock.up(), 0);
 
-                        MLGMaster.LOGGER.info(
-                                        "Testing alternative: {} -> water at {} (currently: {})",
-                                        altBlock, altPlacement, blockAtAltPlacement.getBlock());
-
-                        if (blockAtAltPlacement.getBlock() == Blocks.AIR) {
+                        if (altPlacementLocation != null) {
                                 MLGMaster.LOGGER.info(
-                                                "Found alternative placement at {} (on block {})",
-                                                altPlacement, altBlock);
+                                                "Found alternative placement at {} (on block {}, {} blocks above)",
+                                                altPlacementLocation.waterPos,
+                                                altPlacementLocation.placementBlock,
+                                                altPlacementLocation.blocksAboveOriginal);
 
-                                Vec3d altTarget = Vec3d.ofCenter(altPlacement);
-                                BlockHitResult altHit = createHitResult(altPlacement, altBlock);
+                                Vec3d altTarget = Vec3d.ofCenter(altPlacementLocation.waterPos);
+                                BlockHitResult altHit = createHitResult(
+                                                altPlacementLocation.waterPos,
+                                                altPlacementLocation.placementBlock);
 
-                                return executePlacementWithAim(client, player, altPlacement, altHit,
-                                                altTarget);
+                                return executePlacementWithAim(client, player,
+                                                altPlacementLocation.waterPos, altHit, altTarget);
                         } else {
-                                MLGMaster.LOGGER.info("Alternative placement {} blocked by {}",
-                                                altPlacement, blockAtAltPlacement.getBlock());
+                                MLGMaster.LOGGER.info(
+                                                "Alternative block {} area is too cluttered (no clear space found)",
+                                                altBlock);
                         }
                 }
 
@@ -359,8 +409,6 @@ public class WaterPlacer {
                 return false;
         }
 
-        // Legacy methods for backward compatibility
-
         /**
          * @deprecated Use executeWaterPlacement with MLGPredictionResult instead
          */
@@ -392,3 +440,4 @@ public class WaterPlacer {
                 return attemptPlacement(client, player, velocity);
         }
 }
+

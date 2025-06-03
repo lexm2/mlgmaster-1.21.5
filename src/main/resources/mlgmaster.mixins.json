@@ -4,7 +4,8 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"PlayerInventoryAccessor",
-		"ClientPlayerEntityMixin"
+		"ClientPlayerEntityMixin",
+		"InventoryAccessMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -358,37 +358,4 @@ public class WaterPlacer {
 
                 return false;
         }
-
-        // Legacy methods for backward compatibility
-
-        /**
-         * @deprecated Use executeWaterPlacement with MLGPredictionResult instead
-         */
-        @Deprecated
-        public static boolean attemptPlacement(MinecraftClient client, ClientPlayerEntity player,
-                        Vec3d velocity) {
-                MLGMaster.LOGGER.warn(
-                                "Using deprecated attemptPlacement method - consider updating to use shared prediction");
-
-                // Fall back to doing our own prediction
-                WaterMLGHandler.MLGPredictionResult prediction =
-                                WaterMLGHandler.analyzeFallAndPlacement(client, player, velocity);
-
-                if (!prediction.shouldPlace()) {
-                        MLGMaster.LOGGER.info("Legacy placement check failed: {}",
-                                        prediction.getReason());
-                        return false;
-                }
-
-                return executeWaterPlacement(client, player, prediction);
-        }
-
-        /**
-         * @deprecated Use WaterMLGHandler.analyzeFallAndPlacement instead
-         */
-        @Deprecated
-        public static boolean checkAndAttemptPlacement(MinecraftClient client,
-                        ClientPlayerEntity player, Vec3d velocity) {
-                return attemptPlacement(client, player, velocity);
-        }
 }

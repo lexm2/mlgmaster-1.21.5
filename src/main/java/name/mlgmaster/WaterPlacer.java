@@ -16,7 +16,7 @@ public class WaterPlacer {
          * with the handler's analysis
          */
         public static boolean executeWaterPlacement(MinecraftClient client,
-                        ClientPlayerEntity player, WaterMLGHandler.MLGPredictionResult prediction) {
+                        ClientPlayerEntity player, MLGPredictionResult prediction) {
                 MLGMaster.LOGGER.info("Executing water placement based on prediction...");
 
                 if (!prediction.shouldPlace()) {
@@ -105,7 +105,7 @@ public class WaterPlacer {
          * Try alternative placement locations if the primary location is blocked
          */
         private static boolean tryAlternativePlacements(MinecraftClient client,
-                        ClientPlayerEntity player, WaterMLGHandler.MLGPredictionResult prediction) {
+                        ClientPlayerEntity player, MLGPredictionResult prediction) {
                 MLGMaster.LOGGER.info("Trying alternative placements...");
 
                 LandingPredictor.HitboxLandingResult landingResult = prediction.getLandingResult();

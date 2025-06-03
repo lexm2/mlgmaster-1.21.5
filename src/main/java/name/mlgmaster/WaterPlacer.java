@@ -25,17 +25,11 @@ public class WaterPlacer {
                 }
 
                 // Ensure we have a water bucket
-                if (!InventoryManager.hasWaterBucket(player)) {
-                        MLGMaster.LOGGER.warn("No water bucket available in entire inventory");
-                        InventoryManager.logInventoryContents(player); // Debug log
+                if (!InventoryManager.ensureWaterBucketInHand(player)) {
+                        MLGMaster.LOGGER.warn("No water bucket available");
                         return false;
                 }
 
-                // Use smart water bucket placement
-                if (!InventoryManager.smartMoveWaterBucketToHotbar(player)) {
-                        MLGMaster.LOGGER.warn("Failed to move water bucket to hotbar");
-                        return false;
-                }
                 // Get placement details from the shared prediction
                 BlockPos targetLandingBlock = prediction.getHighestLandingBlock();
                 BlockPos initialWaterPlacementPos = targetLandingBlock.up();
@@ -413,6 +407,37 @@ public class WaterPlacer {
                 }
 
                 return false;
+        }
+
+        /**
+         * @deprecated Use executeWaterPlacement with MLGPredictionResult instead
+         */
+        @Deprecated
+        public static boolean attemptPlacement(MinecraftClient client, ClientPlayerEntity player,
+                        Vec3d velocity) {
+                MLGMaster.LOGGER.warn(
+                                "Using deprecated attemptPlacement method - consider updating to use shared prediction");
+
+                // Fall back to doing our own prediction
+                WaterMLGHandler.MLGPredictionResult prediction =
+                                WaterMLGHandler.analyzeFallAndPlacement(client, player, velocity);
+
+                if (!prediction.shouldPlace()) {
+                        MLGMaster.LOGGER.info("Legacy placement check failed: {}",
+                                        prediction.getReason());
+                        return false;
+                }
+
+                return executeWaterPlacement(client, player, prediction);
+        }
+
+        /**
+         * @deprecated Use WaterMLGHandler.analyzeFallAndPlacement instead
+         */
+        @Deprecated
+        public static boolean checkAndAttemptPlacement(MinecraftClient client,
+                        ClientPlayerEntity player, Vec3d velocity) {
+                return attemptPlacement(client, player, velocity);
         }
 }
 

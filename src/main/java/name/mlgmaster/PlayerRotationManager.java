@@ -41,7 +41,7 @@ public class PlayerRotationManager {
         player.setPitch((float) pitch);
         
         MLGMaster.LOGGER.info("Looking at target: {} | Set rotation: Yaw={} | Pitch={}", 
-            target, String.format("%.1f", yaw), String.format("%.1f", pitch));
+            target, yaw, String.format("%.1f", pitch));
     }
     
     public static void setLookDown(ClientPlayerEntity player) {

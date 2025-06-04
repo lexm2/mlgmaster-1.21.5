@@ -127,7 +127,7 @@ public class SafeLandingBlockChecker {
             Vec3d currentPos, BlockPos scaffoldingPos) {
         double fallDistance = currentPos.y - scaffoldingPos.getY();
 
-        MLGMaster.LOGGER.info("Checking scaffolding safety: fall distance = {:.1f} blocks", fallDistance);
+        MLGMaster.LOGGER.info("Checking scaffolding safety: fall distance = {} blocks", fallDistance);
 
         if (fallDistance >= 150.0) {
             return new SafetyResult(false,
@@ -139,7 +139,7 @@ public class SafeLandingBlockChecker {
         // This line activates the mixin crouch
         ScaffoldingCrouchManager.activateScaffoldingCrouch(player);
 
-        MLGMaster.LOGGER.info("Scaffolding requires crouching - activated crouch for {:.1f} block fall",
+        MLGMaster.LOGGER.info("Scaffolding requires crouching - activated crouch for {} block fall",
                 fallDistance);
         return new SafetyResult(true,
                 String.format("Scaffolding safe with forced crouch for %.1f block fall", fallDistance),

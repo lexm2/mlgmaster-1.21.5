@@ -13,6 +13,13 @@ import net.minecraft.util.shape.VoxelShape;
 
 public class LandingPredictor {
     
+    // Physics constants matching Minecraft
+    private static final double GRAVITY = 0.08;
+    private static final double AIR_DRAG = 0.98;
+    private static final double HORIZONTAL_DRAG = 0.91; // Different drag for horizontal movement
+    private static final double MIN_VELOCITY = 0.001;
+    private static final int MAX_SIMULATION_STEPS = 1000;
+    
     public static class HitboxLandingResult {
         private final BlockPos primaryLandingBlock;
         private final Vec3d landingPosition;
@@ -20,16 +27,21 @@ public class LandingPredictor {
         private final Vec3d lookTarget;
         private final Box finalHitbox;
         private final SafeLandingBlockChecker.SafetyResult safetyResult;
+        private final int simulationSteps;
+        private final Vec3d horizontalDisplacement;
         
         public HitboxLandingResult(BlockPos primaryLandingBlock, Vec3d landingPosition, 
                                   List<BlockPos> allHitBlocks, Vec3d lookTarget, Box finalHitbox, 
-                                  SafeLandingBlockChecker.SafetyResult safetyResult) {
+                                  SafeLandingBlockChecker.SafetyResult safetyResult, int simulationSteps,
+                                  Vec3d horizontalDisplacement) {
             this.primaryLandingBlock = primaryLandingBlock;
             this.landingPosition = landingPosition;
             this.allHitBlocks = allHitBlocks;
             this.lookTarget = lookTarget;
             this.finalHitbox = finalHitbox;
             this.safetyResult = safetyResult;
+            this.simulationSteps = simulationSteps;
+            this.horizontalDisplacement = horizontalDisplacement;
         }
         
         public BlockPos getPrimaryLandingBlock() { return primaryLandingBlock; }
@@ -39,141 +51,132 @@ public class LandingPredictor {
         public Box getOriginalHitbox() { return finalHitbox; }
         public SafeLandingBlockChecker.SafetyResult getSafetyResult() { return safetyResult; }
         public boolean isSafeLanding() { return safetyResult.isSafe(); }
+        public int getSimulationSteps() { return simulationSteps; }
+        public Vec3d getHorizontalDisplacement() { return horizontalDisplacement; }
     }
     
     public static HitboxLandingResult predictHitboxLanding(MinecraftClient client, ClientPlayerEntity player, Vec3d currentPos, Vec3d velocity) {
-        MLGMaster.LOGGER.info("Starting hitbox-aware landing prediction...");
-        MLGMaster.LOGGER.info("Current pos: {} | Velocity: {}", currentPos, velocity);
+        MLGMaster.LOGGER.info("Starting landing prediction with horizontal movement");
+        MLGMaster.LOGGER.info("Position: {}, Velocity: {}", currentPos, velocity);
         
-        // Get player hitbox and dimensions
         Box playerHitbox = player.getBoundingBox();
         double hitboxWidth = playerHitbox.getLengthX();
         double hitboxDepth = playerHitbox.getLengthZ();
         double hitboxHeight = playerHitbox.getLengthY();
         
-        MLGMaster.LOGGER.info("Player hitbox dimensions: width={} | depth={} | height={}", 
-            hitboxWidth, hitboxDepth, hitboxHeight);
-        MLGMaster.LOGGER.info("Hitbox bounds: min=({}, {}, {}) max=({}, {}, {})", 
-            playerHitbox.minX, playerHitbox.minY, playerHitbox.minZ,
-            playerHitbox.maxX, playerHitbox.maxY, playerHitbox.maxZ);
+        MLGMaster.LOGGER.info("Hitbox: {}x{}x{}", hitboxWidth, hitboxDepth, hitboxHeight);
         
-        // Perform hitbox-based collision simulation
-        CollisionResult collision = simulateHitboxCollision(client, player, currentPos, velocity, playerHitbox);
+        CollisionResult collision = simulateMovementWithCollision(client, player, currentPos, velocity, playerHitbox);
         
         if (!collision.hasCollision()) {
-            MLGMaster.LOGGER.warn("No landing collision found for hitbox");
+            MLGMaster.LOGGER.warn("No collision detected in simulation");
             return null;
         }
         
-        MLGMaster.LOGGER.info("Collision found at position: {}", collision.collisionPosition);
-        MLGMaster.LOGGER.info("Colliding blocks: {}", collision.collidingBlocks.size());
+        MLGMaster.LOGGER.info("Landing predicted at: {} after {} steps", collision.collisionPosition, collision.simulationSteps);
+        MLGMaster.LOGGER.info("Horizontal displacement: {}", collision.horizontalDisplacement);
+        MLGMaster.LOGGER.info("Hit {} blocks", collision.collidingBlocks.size());
         
-        // Choose the best landing block (highest Y)
         BlockPos bestLandingBlock = chooseBestLandingBlock(collision.collidingBlocks);
-        
-        // Check safety of the primary landing block
         SafeLandingBlockChecker.SafetyResult safetyResult = 
             SafeLandingBlockChecker.checkLandingSafety(client, player, bestLandingBlock, currentPos);
         
-        MLGMaster.LOGGER.info("Landing safety check: {} - {}", 
-            safetyResult.isSafe() ? "SAFE" : "UNSAFE", safetyResult.getReason());
-        
-        // Sort all hit blocks by height (highest first)
         List<BlockPos> sortedHitBlocks = new ArrayList<>(collision.collidingBlocks);
         sortedHitBlocks.sort((a, b) -> Integer.compare(b.getY(), a.getY()));
         
-        MLGMaster.LOGGER.info("All hit blocks (sorted by height):");
-        for (int i = 0; i < sortedHitBlocks.size(); i++) {
-            BlockPos block = sortedHitBlocks.get(i);
-            MLGMaster.LOGGER.info("  {}. {} (Y={})", i + 1, block, block.getY());
-        }
-        
-        // Calculate optimal look target (center of the water placement location on the highest block)
         Vec3d waterPlacementCenter = Vec3d.ofCenter(bestLandingBlock.up());
         
-        MLGMaster.LOGGER.info("Final selection:");
-        MLGMaster.LOGGER.info("  Primary landing: {} (Y={})", bestLandingBlock, bestLandingBlock.getY());
-        MLGMaster.LOGGER.info("  Water target: {}", waterPlacementCenter);
-        MLGMaster.LOGGER.info("  Safety: {}", safetyResult.isSafe() ? "SAFE" : "UNSAFE");
-        
         return new HitboxLandingResult(bestLandingBlock, collision.collisionPosition, 
-            sortedHitBlocks, waterPlacementCenter, collision.finalHitbox, safetyResult);
+            sortedHitBlocks, waterPlacementCenter, collision.finalHitbox, safetyResult,
+            collision.simulationSteps, collision.horizontalDisplacement);
     }
     
-    private static CollisionResult simulateHitboxCollision(MinecraftClient client, ClientPlayerEntity player, 
-                                                          Vec3d startPos, Vec3d velocity, Box originalHitbox) {
-        MLGMaster.LOGGER.info("Starting hitbox collision simulation");
-        MLGMaster.LOGGER.info("Start position: {}", startPos);
-        MLGMaster.LOGGER.info("Initial velocity: {}", velocity);
-        
-        // Physics constants
-        final double GRAVITY = 0.08; // Minecraft gravity
-        final double DRAG = 0.98; // Air resistance
-        final double MIN_VELOCITY = 0.001; // Stop simulation when movement is negligible
-        final int MAX_STEPS = 1000; // Prevent infinite loops
-        
+    private static CollisionResult simulateMovementWithCollision(MinecraftClient client, ClientPlayerEntity player, 
+                                                               Vec3d startPos, Vec3d velocity, Box originalHitbox) {
         Vec3d currentPos = startPos;
         Vec3d currentVelocity = velocity;
+        Vec3d startHorizontalPos = new Vec3d(startPos.x, 0, startPos.z);
+        
+        // Center the hitbox on the starting position
         Box currentHitbox = originalHitbox.offset(startPos.subtract(originalHitbox.getCenter()));
         
         List<BlockPos> collidingBlocks = new ArrayList<>();
         
-        for (int step = 0; step < MAX_STEPS; step++) {
-            // Apply gravity
-            currentVelocity = currentVelocity.add(0, -GRAVITY, 0);
+        for (int step = 0; step < MAX_SIMULATION_STEPS; step++) {
+            // Store previous position for movement calculation
+            Vec3d previousPos = currentPos;
             
-            // Apply drag
-            currentVelocity = currentVelocity.multiply(DRAG, DRAG, DRAG);
+            // Apply gravity to vertical velocity
+            currentVelocity = new Vec3d(
+                currentVelocity.x,
+                currentVelocity.y - GRAVITY,
+                currentVelocity.z
+            );
             
-            // Calculate next position
+            // Apply different drag for horizontal and vertical movement
+            currentVelocity = new Vec3d(
+                currentVelocity.x * HORIZONTAL_DRAG,
+                currentVelocity.y * AIR_DRAG,
+                currentVelocity.z * HORIZONTAL_DRAG
+            );
+            
+            // Calculate next position with full 3D movement
             Vec3d nextPos = currentPos.add(currentVelocity);
             Box nextHitbox = currentHitbox.offset(currentVelocity);
             
-            MLGMaster.LOGGER.info("Step {}: pos={} vel={} hitbox_center={}", 
-                step, nextPos, currentVelocity, nextHitbox.getCenter());
-            
-            // Check for collisions with blocks
-            List<BlockPos> stepCollisions = checkHitboxCollisions(client, currentHitbox, nextHitbox);
+            // Check for block collisions along the movement path
+            List<BlockPos> stepCollisions = checkMovementCollisions(client, currentHitbox, nextHitbox, currentVelocity);
             
             if (!stepCollisions.isEmpty()) {
-                MLGMaster.LOGGER.info("Collision detected at step {} with {} blocks", step, stepCollisions.size());
+                // Calculate horizontal displacement from start to collision point
+                Vec3d currentHorizontalPos = new Vec3d(nextPos.x, 0, nextPos.z);
+                Vec3d horizontalDisplacement = currentHorizontalPos.subtract(startHorizontalPos);
+                
+                MLGMaster.LOGGER.info("Collision at step {}: horizontal displacement = {}", step, horizontalDisplacement);
                 
                 // Add all colliding blocks
                 for (BlockPos blockPos : stepCollisions) {
                     if (!collidingBlocks.contains(blockPos)) {
                         collidingBlocks.add(blockPos);
-                        MLGMaster.LOGGER.info("  Colliding with block: {} (Y={})", blockPos, blockPos.getY());
                     }
                 }
                 
-                // Return collision result
-                return new CollisionResult(true, nextPos, collidingBlocks, nextHitbox);
+                return new CollisionResult(true, nextPos, collidingBlocks, nextHitbox, step, horizontalDisplacement);
             }
             
-            // Update position and hitbox for next iteration
+            // Update position and hitbox
             currentPos = nextPos;
             currentHitbox = nextHitbox;
             
-            // Stop if velocity becomes negligible
-            if (Math.abs(currentVelocity.x) < MIN_VELOCITY && 
-                Math.abs(currentVelocity.y) < MIN_VELOCITY && 
-                Math.abs(currentVelocity.z) < MIN_VELOCITY) {
-                MLGMaster.LOGGER.info("Simulation stopped: velocity became negligible at step {}", step);
+            // Check if movement has become negligible
+            if (isMovementNegligible(currentVelocity)) {
+                MLGMaster.LOGGER.info("Movement became negligible at step {}", step);
+                break;
+            }
+            
+            // Safety check - if falling too far below start, stop simulation
+            if (currentPos.y < startPos.y - 100) {
+                MLGMaster.LOGGER.warn("Fell too far, stopping simulation at step {}", step);
                 break;
             }
         }
         
-        MLGMaster.LOGGER.warn("No collision found after {} steps", MAX_STEPS);
-        return new CollisionResult(false, currentPos, collidingBlocks, currentHitbox);
+        // Calculate final horizontal displacement even if no collision
+        Vec3d finalHorizontalPos = new Vec3d(currentPos.x, 0, currentPos.z);
+        Vec3d horizontalDisplacement = finalHorizontalPos.subtract(startHorizontalPos);
+        
+        return new CollisionResult(false, currentPos, collidingBlocks, currentHitbox, MAX_SIMULATION_STEPS, horizontalDisplacement);
     }
     
-    private static List<BlockPos> checkHitboxCollisions(MinecraftClient client, Box currentHitbox, Box nextHitbox) {
+    private static List<BlockPos> checkMovementCollisions(MinecraftClient client, Box currentHitbox, Box nextHitbox, Vec3d velocity) {
         List<BlockPos> collidingBlocks = new ArrayList<>();
         
-        // Create a combined box that encompasses both current and next positions
+        // Create movement box that encompasses the entire movement path
         Box movementBox = currentHitbox.union(nextHitbox);
         
-        // Get all block positions that could intersect with our movement
+        // Expand slightly to account for floating point precision
+        movementBox = movementBox.expand(0.1);
+        
         int minX = (int) Math.floor(movementBox.minX);
         int minY = (int) Math.floor(movementBox.minY);
         int minZ = (int) Math.floor(movementBox.minZ);
@@ -181,35 +184,23 @@ public class LandingPredictor {
         int maxY = (int) Math.ceil(movementBox.maxY);
         int maxZ = (int) Math.ceil(movementBox.maxZ);
         
-        MLGMaster.LOGGER.info("Checking collisions in area: ({},{},{}) to ({},{},{})", 
-            minX, minY, minZ, maxX, maxY, maxZ);
-        
-        // Check each block position for collision
+        // Check each potential block position
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     BlockPos blockPos = new BlockPos(x, y, z);
-                    BlockState blockState = client.world.getBlockState(blockPos);
                     
-                    // Skip air blocks
-                    if (blockState.isAir()) {
-                        continue;
-                    }
-                    
-                    // Get the collision shape of the block
-                    VoxelShape blockShape = blockState.getCollisionShape(client.world, blockPos);
-                    if (blockShape.isEmpty()) {
-                        continue;
-                    }
-                    
-                    // Convert voxel shape to box for intersection testing
-                    Box blockBox = blockShape.getBoundingBox().offset(blockPos);
-                    
-                    // Check if the next hitbox intersects with this block
-                    if (nextHitbox.intersects(blockBox)) {
-                        collidingBlocks.add(blockPos);
-                        MLGMaster.LOGGER.info("  Collision detected with block {} (type: {})", 
-                            blockPos, blockState.getBlock());
+                    if (isBlockSolid(client, blockPos)) {
+                        // Get precise collision shape
+                        VoxelShape blockShape = getBlockCollisionShape(client, blockPos);
+                        if (!blockShape.isEmpty()) {
+                            Box blockBox = blockShape.getBoundingBox().offset(blockPos);
+                            
+                            // Check if movement path intersects this block
+                            if (doesMovementIntersectBlock(currentHitbox, nextHitbox, blockBox, velocity)) {
+                                collidingBlocks.add(blockPos);
+                            }
+                        }
                     }
                 }
             }
@@ -218,32 +209,63 @@ public class LandingPredictor {
         return collidingBlocks;
     }
     
-    private static BlockPos chooseBestLandingBlock(List<BlockPos> collidingBlocks) {
-        MLGMaster.LOGGER.info("Choosing best landing from {} candidates:", collidingBlocks.size());
+    private static boolean doesMovementIntersectBlock(Box currentHitbox, Box nextHitbox, Box blockBox, Vec3d velocity) {
+        // Check if either current or next position intersects
+        if (currentHitbox.intersects(blockBox) || nextHitbox.intersects(blockBox)) {
+            return true;
+        }
         
+        // Check intermediate positions for fast movement
+        double velocityMagnitude = velocity.length();
+        if (velocityMagnitude > 1.0) {
+            // Sample intermediate positions for fast movement
+            int samples = Math.min(10, (int) Math.ceil(velocityMagnitude * 2));
+            for (int i = 1; i < samples; i++) {
+                double t = (double) i / samples;
+                Vec3d intermediateOffset = velocity.multiply(t);
+                Box intermediateHitbox = currentHitbox.offset(intermediateOffset);
+                
+                if (intermediateHitbox.intersects(blockBox)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    private static boolean isBlockSolid(MinecraftClient client, BlockPos blockPos) {
+        BlockState blockState = client.world.getBlockState(blockPos);
+        return !blockState.isAir() && !blockState.getCollisionShape(client.world, blockPos).isEmpty();
+    }
+    
+    private static VoxelShape getBlockCollisionShape(MinecraftClient client, BlockPos blockPos) {
+        BlockState blockState = client.world.getBlockState(blockPos);
+        return blockState.getCollisionShape(client.world, blockPos);
+    }
+    
+    private static boolean isMovementNegligible(Vec3d velocity) {
+        return Math.abs(velocity.x) < MIN_VELOCITY && 
+               Math.abs(velocity.y) < MIN_VELOCITY && 
+               Math.abs(velocity.z) < MIN_VELOCITY;
+    }
+    
+    private static BlockPos chooseBestLandingBlock(List<BlockPos> collidingBlocks) {
         if (collidingBlocks.isEmpty()) {
             return null;
         }
         
-        // Find the block with the highest Y value
+        // Find the highest block that's most likely to be the primary landing surface
         BlockPos best = collidingBlocks.get(0);
         int highestY = best.getY();
         
-        MLGMaster.LOGGER.info("Initial candidate: {} (Y={})", best, highestY);
-        
         for (BlockPos block : collidingBlocks) {
-            int currentY = block.getY();
-            MLGMaster.LOGGER.info("Comparing: {} (Y={}) vs current highest Y={}", 
-                block, currentY, highestY);
-            
-            if (currentY > highestY) {
-                highestY = currentY;
+            if (block.getY() > highestY) {
+                highestY = block.getY();
                 best = block;
-                MLGMaster.LOGGER.info("  New highest: {} (Y={})", block, currentY);
             }
         }
         
-        MLGMaster.LOGGER.info("Final selection: Block {} (Y={})", best, highestY);
         return best;
     }
     
@@ -252,12 +274,17 @@ public class LandingPredictor {
         final Vec3d collisionPosition;
         final List<BlockPos> collidingBlocks;
         final Box finalHitbox;
+        final int simulationSteps;
+        final Vec3d horizontalDisplacement;
         
-        CollisionResult(boolean hasCollision, Vec3d collisionPosition, List<BlockPos> collidingBlocks, Box finalHitbox) {
+        CollisionResult(boolean hasCollision, Vec3d collisionPosition, List<BlockPos> collidingBlocks, 
+                       Box finalHitbox, int simulationSteps, Vec3d horizontalDisplacement) {
             this.hasCollision = hasCollision;
             this.collisionPosition = collisionPosition;
             this.collidingBlocks = collidingBlocks;
             this.finalHitbox = finalHitbox;
+            this.simulationSteps = simulationSteps;
+            this.horizontalDisplacement = horizontalDisplacement;
         }
         
         boolean hasCollision() { return hasCollision; }

@@ -56,33 +56,25 @@ public class WaterMLGHandler {
                     prediction.getDistanceToTarget());
         }
 
-        MLGMaster.LOGGER.info("🎯 MLG TICK ANALYSIS: {} - {}",
-                prediction.shouldPlace() ? "PLACE NOW!" : "WAITING", prediction.getReason());
-
         if (prediction.shouldPlace()) {
             BlockPos targetBlock = prediction.getHighestLandingBlock();
             Vec3d targetPos = prediction.getWaterPlacementTarget();
 
             MLGMaster.LOGGER.info("💧 EXECUTING DISTANCE-BASED PLACEMENT:");
-            MLGMaster.LOGGER.info("  Fall speed: {:.3f} blocks/tick", Math.abs(velocity.y));
-            MLGMaster.LOGGER.info("  Placement threshold: {:.3f} blocks",
-                    prediction.getPlacementDistance());
-            MLGMaster.LOGGER.info("  Distance to target: {:.3f} blocks",
-                    prediction.getDistanceToTarget());
             MLGMaster.LOGGER.info("  Target: {} at {}", targetBlock, targetPos);
 
             if (WaterPlacer.executeWaterPlacement(client, player, prediction)) {
                 isActive = true;
-                MLGMaster.LOGGER.info("✅ Distance-based water placement successful!");
+                MLGMaster.LOGGER.info("Distance-based water placement successful!");
 
                 // Shorter pause for urgent situations
                 long pauseDuration = prediction.isUrgentPlacement() ? 500 : 1000;
                 lastPredictionTime = currentTime + pauseDuration;
             } else {
-                MLGMaster.LOGGER.warn("❌ Distance-based water placement failed");
+                MLGMaster.LOGGER.warn("Distance-based water placement failed");
             }
         } else if (prediction.willLand()) {
-            MLGMaster.LOGGER.info("📊 Distance analysis: {} | Distance: {:.3f} | Speed: {:.3f}",
+            MLGMaster.LOGGER.info("Distance analysis: {} | Distance: {} | Speed: {}",
                     prediction.getReason(), prediction.getDistanceToTarget(), Math.abs(velocity.y));
         }
     }

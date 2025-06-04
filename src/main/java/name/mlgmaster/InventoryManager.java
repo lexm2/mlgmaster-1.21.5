@@ -1,5 +1,6 @@
 package name.mlgmaster;
 
+import name.mlgmaster.mixin.PlayerInventoryAccessor;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -14,6 +15,7 @@ public class InventoryManager {
         
         MLGMaster.LOGGER.info("Searching for water bucket in hotbar...");
         
+        // Search hotbar for water bucket
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
             if (stack.getItem() == Items.WATER_BUCKET) {
@@ -27,9 +29,8 @@ public class InventoryManager {
     
     private static boolean switchToSlot(ClientPlayerEntity player, int slot) {
         try {
-            java.lang.reflect.Field field = player.getInventory().getClass().getDeclaredField("selectedSlot");
-            field.setAccessible(true);
-            field.setInt(player.getInventory(), slot);
+            PlayerInventoryAccessor inventoryAccessor = (PlayerInventoryAccessor) player.getInventory();
+            inventoryAccessor.setSelectedSlot(slot);
             MLGMaster.LOGGER.info("Switched to water bucket in slot {}", slot);
             return true;
         } catch (Exception e) {

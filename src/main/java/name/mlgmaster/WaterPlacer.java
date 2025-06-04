@@ -12,7 +12,6 @@ public class WaterPlacer {
 
     public static boolean executeWaterPlacement(MinecraftClient client, ClientPlayerEntity player,
             MLGPredictionResult prediction) {
-        MLGMaster.LOGGER.info("Executing water placement based on prediction...");
 
         if (!prediction.shouldPlace()) {
             MLGMaster.LOGGER.warn("Placement cancelled: {}", prediction.getReason());
@@ -28,7 +27,6 @@ public class WaterPlacer {
         Vec3d waterPlacementTarget = prediction.getWaterPlacementTarget();
         BlockPos waterPlacementPos = targetLandingBlock.up();
 
-        MLGMaster.LOGGER.info("Placement target details:");
         MLGMaster.LOGGER.info("  Landing block: {} at ({}, {}, {})", targetLandingBlock,
                 targetLandingBlock.getX(), targetLandingBlock.getY(), targetLandingBlock.getZ());
         MLGMaster.LOGGER.info("  Water position: {} at ({}, {}, {})", waterPlacementPos,

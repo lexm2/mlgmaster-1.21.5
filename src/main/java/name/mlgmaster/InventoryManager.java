@@ -12,7 +12,7 @@ public class InventoryManager {
             return true;
         }
         
-        MLGMaster.LOGGER.info("🔄 Searching for water bucket in hotbar...");
+        MLGMaster.LOGGER.info("Searching for water bucket in hotbar...");
         
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
@@ -21,7 +21,7 @@ public class InventoryManager {
             }
         }
         
-        MLGMaster.LOGGER.warn("❌ No water bucket found in hotbar");
+        MLGMaster.LOGGER.warn("No water bucket found in hotbar");
         return false;
     }
     
@@ -30,10 +30,10 @@ public class InventoryManager {
             java.lang.reflect.Field field = player.getInventory().getClass().getDeclaredField("selectedSlot");
             field.setAccessible(true);
             field.setInt(player.getInventory(), slot);
-            MLGMaster.LOGGER.info("✅ Switched to water bucket in slot {}", slot);
+            MLGMaster.LOGGER.info("Switched to water bucket in slot {}", slot);
             return true;
         } catch (Exception e) {
-            MLGMaster.LOGGER.error("❌ Failed to switch to slot {}: {}", slot, e.getMessage());
+            MLGMaster.LOGGER.error("Failed to switch to slot {}: {}", slot, e.getMessage());
             return false;
         }
     }

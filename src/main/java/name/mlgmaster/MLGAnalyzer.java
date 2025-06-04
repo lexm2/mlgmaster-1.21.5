@@ -78,7 +78,7 @@ public class MLGAnalyzer {
         double velocityFactor = Math.min(fallSpeed * VELOCITY_MULTIPLIER,
                 MAX_PLACEMENT_DISTANCE - BASE_PLACEMENT_DISTANCE);
         double dynamicDistance = BASE_PLACEMENT_DISTANCE + velocityFactor;
-        return Math.max(BASE_PLACEMENT_DISTANCE, Math.min(MAX_PLACEMENT_DISTANCE, dynamicDistance));
+        return Math.clamp(dynamicDistance, BASE_PLACEMENT_DISTANCE, MAX_PLACEMENT_DISTANCE);
     }
 
     private static boolean isUrgentPlacement(ClientPlayerEntity player, Vec3d velocity) {
@@ -115,7 +115,7 @@ public class MLGAnalyzer {
      */
     public static boolean isBlockSolid(MinecraftClient client, BlockPos pos) {
         if (client.world == null) {
-            MLGMaster.LOGGER.warn("⚠️ BLOCK CHECK: World is null for position {}", pos);
+            MLGMaster.LOGGER.warn("BLOCK CHECK: World is null for position {}", pos);
             return false;
         }
 
@@ -124,7 +124,7 @@ public class MLGAnalyzer {
 
         // Only log interesting blocks (solid ones or occasionally air)
         if (isSolid) {
-            MLGMaster.LOGGER.info("🧱 BLOCK: {} = {} ({})", pos, "SOLID", blockType);
+            MLGMaster.LOGGER.info("BLOCK: {} = {} ({})", pos, "SOLID", blockType);
         }
 
         return isSolid;

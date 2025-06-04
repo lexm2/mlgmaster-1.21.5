@@ -52,7 +52,7 @@ public class WaterMLGHandler {
                 MLGAnalyzer.analyzeFallAndPlacement(client, player, velocity);
 
         if (prediction.isUrgentPlacement()) {
-            MLGMaster.LOGGER.warn("🚨 URGENT MLG SITUATION: {} blocks to target!",
+            MLGMaster.LOGGER.warn("URGENT MLG SITUATION: {} blocks to target!",
                     prediction.getDistanceToTarget());
         }
 
@@ -60,8 +60,8 @@ public class WaterMLGHandler {
             BlockPos targetBlock = prediction.getHighestLandingBlock();
             Vec3d targetPos = prediction.getWaterPlacementTarget();
 
-            MLGMaster.LOGGER.info("💧 EXECUTING DISTANCE-BASED PLACEMENT:");
-            MLGMaster.LOGGER.info("  Target: {} at {}", targetBlock, targetPos);
+            MLGMaster.LOGGER.info("EXECUTING DISTANCE-BASED PLACEMENT:");
+            MLGMaster.LOGGER.info("Target: {} at {}", targetBlock, targetPos);
 
             if (WaterPlacer.executeWaterPlacement(client, player, prediction)) {
                 isActive = true;

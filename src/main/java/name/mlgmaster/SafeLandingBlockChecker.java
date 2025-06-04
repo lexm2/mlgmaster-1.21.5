@@ -87,7 +87,7 @@ public class SafeLandingBlockChecker {
 
         // Check scaffolding with crouch requirement
         if (landingBlockType == Blocks.SCAFFOLDING) {
-            return checkScaffoldingWithCrouch(client, player, currentPlayerPos, landingBlock);
+            return checkScaffoldingWithCrouch(player, currentPlayerPos, landingBlock);
         }
 
         // Everything else is not safe - need water clutch
@@ -123,7 +123,7 @@ public class SafeLandingBlockChecker {
     /**
      * Check scaffolding safety and handle crouch requirement
      */
-    private static SafetyResult checkScaffoldingWithCrouch(MinecraftClient client, ClientPlayerEntity player,
+    private static SafetyResult checkScaffoldingWithCrouch(ClientPlayerEntity player,
             Vec3d currentPos, BlockPos scaffoldingPos) {
         double fallDistance = currentPos.y - scaffoldingPos.getY();
 
@@ -156,10 +156,10 @@ public class SafeLandingBlockChecker {
         MLGMaster.LOGGER.info("Landing safety evaluation: {}", result);
 
         if (result.isSafe()) {
-            MLGMaster.LOGGER.info("✅ Skipping water placement: {}", result.getReason());
+            MLGMaster.LOGGER.info("Skipping water placement: {}", result.getReason());
             return true;
         } else {
-            MLGMaster.LOGGER.info("⚠️ Water placement needed: {}", result.getReason());
+            MLGMaster.LOGGER.info("Water placement needed: {}", result.getReason());
             return false;
         }
     }

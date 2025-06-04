@@ -25,7 +25,7 @@ public class ScaffoldingCrouchManager {
             // Activate forced sneak
             forceSneak = true;
 
-            MLGMaster.LOGGER.info("🔽 Activated scaffolding crouch via mixin");
+            MLGMaster.LOGGER.info("Activated scaffolding crouch via mixin");
         }
     }
 
@@ -37,9 +37,9 @@ public class ScaffoldingCrouchManager {
             // Only release if player wasn't already sneaking
             if (!wasAlreadySneaking) {
                 forceSneak = false;
-                MLGMaster.LOGGER.info("🔼 Released scaffolding crouch");
+                MLGMaster.LOGGER.info("Released scaffolding crouch");
             } else {
-                MLGMaster.LOGGER.info("🔼 Keeping crouch (player was already sneaking)");
+                MLGMaster.LOGGER.info("Keeping crouch (player was already sneaking)");
             }
 
             wasAlreadySneaking = false;
@@ -53,7 +53,7 @@ public class ScaffoldingCrouchManager {
         if (forceSneak) {
             forceSneak = false;
             wasAlreadySneaking = false;
-            MLGMaster.LOGGER.info("🚨 Force released scaffolding crouch");
+            MLGMaster.LOGGER.info("Force released scaffolding crouch");
         }
     }
 

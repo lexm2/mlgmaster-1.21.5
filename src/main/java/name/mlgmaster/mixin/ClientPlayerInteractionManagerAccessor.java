@@ -12,13 +12,15 @@ import net.minecraft.util.hit.BlockHitResult;
 
 @Mixin(ClientPlayerInteractionManager.class)
 public interface ClientPlayerInteractionManagerAccessor {
-    
+
     @Invoker("interactItem")
     ActionResult invokeInteractItem(PlayerEntity player, Hand hand);
-    
+
     @Invoker("interactBlock")
-    ActionResult invokeInteractBlock(ClientPlayerEntity player, Hand hand, BlockHitResult hitResult);
-    
+    ActionResult invokeInteractBlock(ClientPlayerEntity player, Hand hand,
+            BlockHitResult hitResult);
+
     @Invoker("interactBlockInternal")
-    ActionResult invokeInteractBlockInternal(ClientPlayerEntity player, Hand hand, BlockHitResult hitResult);
+    ActionResult invokeInteractBlockInternal(ClientPlayerEntity player, Hand hand,
+            BlockHitResult hitResult);
 }

@@ -40,8 +40,8 @@ public class SafeLandingBlockChecker {
 
         @Override
         public String toString() {
-            return String.format("SafetyResult{safe=%s, reason='%s', needsCrouching=%s}",
-                    isSafe, reason, needsCrouching);
+            return String.format("SafetyResult{safe=%s, reason='%s', needsCrouching=%s}", isSafe,
+                    reason, needsCrouching);
         }
     }
 
@@ -66,7 +66,8 @@ public class SafeLandingBlockChecker {
         }
 
         // Twisted vines prevent fall damage
-        if (landingBlockType == Blocks.TWISTING_VINES || landingBlockType == Blocks.TWISTING_VINES_PLANT) {
+        if (landingBlockType == Blocks.TWISTING_VINES
+                || landingBlockType == Blocks.TWISTING_VINES_PLANT) {
             return new SafetyResult(true, "Twisted vines prevent fall damage");
         }
 
@@ -99,13 +100,14 @@ public class SafeLandingBlockChecker {
     /**
      * Check if carpet has slime block or powder snow below it
      */
-    private static SafetyResult checkCarpetWithSafeBlockBelow(MinecraftClient client, BlockPos carpetPos) {
+    private static SafetyResult checkCarpetWithSafeBlockBelow(MinecraftClient client,
+            BlockPos carpetPos) {
         BlockPos belowPos = carpetPos.down();
         BlockState belowState = client.world.getBlockState(belowPos);
         Block belowBlock = belowState.getBlock();
 
-        MLGMaster.LOGGER.info("Checking carpet at {} | Block below: {}",
-                carpetPos, belowBlock.getName().getString());
+        MLGMaster.LOGGER.info("Checking carpet at {} | Block below: {}", carpetPos,
+                belowBlock.getName().getString());
 
         if (belowBlock == Blocks.SLIME_BLOCK) {
             return new SafetyResult(true, "Carpet with slime block below - safe landing");
@@ -123,17 +125,17 @@ public class SafeLandingBlockChecker {
     /**
      * Check scaffolding safety and handle crouch requirement
      */
-    private static SafetyResult checkScaffoldingWithCrouch(MinecraftClient client, ClientPlayerEntity player,
-            Vec3d currentPos, BlockPos scaffoldingPos) {
+    private static SafetyResult checkScaffoldingWithCrouch(MinecraftClient client,
+            ClientPlayerEntity player, Vec3d currentPos, BlockPos scaffoldingPos) {
         double fallDistance = currentPos.y - scaffoldingPos.getY();
 
-        MLGMaster.LOGGER.info("Checking scaffolding safety: fall distance = {} blocks", fallDistance);
+        MLGMaster.LOGGER.info("Checking scaffolding safety: fall distance = {} blocks",
+                fallDistance);
 
         if (fallDistance >= 150.0) {
-            return new SafetyResult(false,
-                    String.format(
-                            "Scaffolding unsafe for %.1f block fall (exceeds 150 block limit) - need water clutch",
-                            fallDistance));
+            return new SafetyResult(false, String.format(
+                    "Scaffolding unsafe for %.1f block fall (exceeds 150 block limit) - need water clutch",
+                    fallDistance));
         }
 
         // This line activates the mixin crouch
@@ -141,16 +143,15 @@ public class SafeLandingBlockChecker {
 
         MLGMaster.LOGGER.info("Scaffolding requires crouching - activated crouch for {} block fall",
                 fallDistance);
-        return new SafetyResult(true,
-                String.format("Scaffolding safe with forced crouch for %.1f block fall", fallDistance),
-                true);
+        return new SafetyResult(true, String.format(
+                "Scaffolding safe with forced crouch for %.1f block fall", fallDistance), true);
     }
 
     /**
      * Simple check if we should skip water placement
      */
-    public static boolean shouldSkipWaterPlacement(MinecraftClient client, ClientPlayerEntity player,
-            BlockPos landingBlock, Vec3d currentPlayerPos) {
+    public static boolean shouldSkipWaterPlacement(MinecraftClient client,
+            ClientPlayerEntity player, BlockPos landingBlock, Vec3d currentPlayerPos) {
         SafetyResult result = checkLandingSafety(client, player, landingBlock, currentPlayerPos);
 
         MLGMaster.LOGGER.info("Landing safety evaluation: {}", result);
@@ -168,10 +169,8 @@ public class SafeLandingBlockChecker {
      * Quick check for obviously safe blocks
      */
     public static boolean isObviouslySafe(Block block) {
-        return block == Blocks.WATER ||
-                block == Blocks.TWISTING_VINES ||
-                block == Blocks.TWISTING_VINES_PLANT ||
-                block == Blocks.SLIME_BLOCK ||
-                block == Blocks.POWDER_SNOW;
+        return block == Blocks.WATER || block == Blocks.TWISTING_VINES
+                || block == Blocks.TWISTING_VINES_PLANT || block == Blocks.SLIME_BLOCK
+                || block == Blocks.POWDER_SNOW;
     }
 }

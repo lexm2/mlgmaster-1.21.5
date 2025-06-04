@@ -6,15 +6,15 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 
 public class InventoryManager {
-    
+
     public static boolean ensureWaterBucketInHand(ClientPlayerEntity player) {
         ItemStack mainHand = player.getMainHandStack();
         if (mainHand.getItem() == Items.WATER_BUCKET) {
             return true;
         }
-        
+
         MLGMaster.LOGGER.info("Searching for water bucket in hotbar...");
-        
+
         // Search hotbar for water bucket
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
@@ -22,14 +22,15 @@ public class InventoryManager {
                 return switchToSlot(player, i);
             }
         }
-        
+
         MLGMaster.LOGGER.warn("No water bucket found in hotbar");
         return false;
     }
-    
+
     private static boolean switchToSlot(ClientPlayerEntity player, int slot) {
         try {
-            PlayerInventoryAccessor inventoryAccessor = (PlayerInventoryAccessor) player.getInventory();
+            PlayerInventoryAccessor inventoryAccessor =
+                    (PlayerInventoryAccessor) player.getInventory();
             inventoryAccessor.setSelectedSlot(slot);
             MLGMaster.LOGGER.info("Switched to water bucket in slot {}", slot);
             return true;
@@ -38,13 +39,13 @@ public class InventoryManager {
             return false;
         }
     }
-    
+
     public static boolean hasWaterBucket(ClientPlayerEntity player) {
         // Check main hand first
         if (player.getMainHandStack().getItem() == Items.WATER_BUCKET) {
             return true;
         }
-        
+
         // Check hotbar
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
@@ -52,7 +53,7 @@ public class InventoryManager {
                 return true;
             }
         }
-        
+
         return false;
     }
 }

@@ -149,8 +149,8 @@ public class MLGAnalyzer {
             if (estimatedImpactTime <= 10) {
                 return "Emergency placement - " + estimatedImpactTime + " ticks left";
             } else if (distanceToTarget <= placementDistance) {
-                return "Within placement distance (" + distanceToTarget + "/"
-                        + placementDistance + ")";
+                return "Within placement distance (" + distanceToTarget + "/" + placementDistance
+                        + ")";
             } else {
                 return "Urgent placement needed";
             }

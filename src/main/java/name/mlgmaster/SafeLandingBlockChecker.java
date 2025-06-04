@@ -87,7 +87,7 @@ public class SafeLandingBlockChecker {
 
         // Check scaffolding with crouch requirement
         if (landingBlockType == Blocks.SCAFFOLDING) {
-            return checkScaffoldingWithCrouch(player, currentPlayerPos, landingBlock);
+            return checkScaffoldingWithCrouch(client, player, currentPlayerPos, landingBlock);
         }
 
         // Everything else is not safe - need water clutch
@@ -123,7 +123,7 @@ public class SafeLandingBlockChecker {
     /**
      * Check scaffolding safety and handle crouch requirement
      */
-    private static SafetyResult checkScaffoldingWithCrouch(ClientPlayerEntity player,
+    private static SafetyResult checkScaffoldingWithCrouch(MinecraftClient client, ClientPlayerEntity player,
             Vec3d currentPos, BlockPos scaffoldingPos) {
         double fallDistance = currentPos.y - scaffoldingPos.getY();
 
@@ -137,7 +137,7 @@ public class SafeLandingBlockChecker {
         }
 
         // This line activates the mixin crouch
-        ScaffoldingCrouchManager.activateScaffoldingCrouch(player);
+        ScaffoldingCrouchManager.activateScaffoldingCrouch(player, client);
 
         MLGMaster.LOGGER.info("Scaffolding requires crouching - activated crouch for {} block fall",
                 fallDistance);

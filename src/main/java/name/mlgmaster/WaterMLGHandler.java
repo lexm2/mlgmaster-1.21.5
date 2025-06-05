@@ -51,11 +51,6 @@ public class WaterMLGHandler {
         MLGPredictionResult prediction =
                 MLGAnalyzer.analyzeFallAndPlacement(client, player, velocity);
 
-        if (prediction.isUrgentPlacement()) {
-            MLGMaster.LOGGER.warn("URGENT MLG SITUATION: {} blocks to target!",
-                    prediction.getDistanceToTarget());
-        }
-
         if (prediction.shouldPlace()) {
             BlockPos targetBlock = prediction.getHighestLandingBlock();
             Vec3d targetPos = prediction.getPlacementTarget();
@@ -63,13 +58,12 @@ public class WaterMLGHandler {
             MLGMaster.LOGGER.info("EXECUTING DISTANCE-BASED PLACEMENT:");
             MLGMaster.LOGGER.info("Target: {} at {}", targetBlock, targetPos);
 
-            if (WaterPlacer.executeWaterPlacement(client, player, prediction)) {
+            if (BlockPlacer.executeBlockPlacement(client, player, prediction)) {
                 isActive = true;
                 MLGMaster.LOGGER.info("Distance-based water placement successful!");
 
-                // Shorter pause for urgent situations
-                long pauseDuration = prediction.isUrgentPlacement() ? 500 : 1000;
-                lastPredictionTime = currentTime + pauseDuration;
+                // 500 ms wait
+                lastPredictionTime = currentTime + 500;
             } else {
                 MLGMaster.LOGGER.warn("Distance-based water placement failed");
             }

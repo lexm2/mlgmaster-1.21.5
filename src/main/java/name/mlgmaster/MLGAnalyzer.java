@@ -19,21 +19,20 @@ public class MLGAnalyzer {
 
         // Basic fall validation
         if (velocity.y >= -0.1) {
-            return createFailResult("Not falling", 0, false);
+            return createFailResult("Not falling", 0);
         }
 
         if (player.fallDistance < 3.0) {
-            return createFailResult("Insufficient fall distance", 0, false);
+            return createFailResult("Insufficient fall distance", 0);
         }
 
         if (player.isOnGround()) {
-            return createFailResult("On ground", 0, false);
+            return createFailResult("On ground", 0);
         }
 
         // Calculate placement parameters
         double fallSpeed = Math.abs(velocity.y);
         double placementDistance = calculatePlacementDistance(fallSpeed);
-        boolean isUrgent = isUrgentPlacement(player, velocity);
         int estimatedImpactTime = estimateImpactTime(client, player, velocity);
 
         // Predict landing
@@ -41,12 +40,12 @@ public class MLGAnalyzer {
                 LandingPredictor.predictHitboxLanding(client, player, playerPos, velocity);
 
         if (landingResult == null) {
-            return createFailResult("No landing predicted", placementDistance, isUrgent);
+            return createFailResult("No landing predicted", placementDistance);
         }
 
         BlockPos highestBlock = findHighestHitBlock(landingResult.getAllHitBlocks());
         if (highestBlock == null) {
-            return createFailResult("No highest block found", placementDistance, isUrgent);
+            return createFailResult("No highest block found", placementDistance);
         }
 
         // Check landing safety
@@ -56,7 +55,7 @@ public class MLGAnalyzer {
         if (safetyResult.isSafe()) {
             return new MLGPredictionResult(false, true, landingResult, highestBlock, null, -1,
                     "Safe landing: " + safetyResult.getReason(), safetyResult, placementDistance,
-                    isUrgent, Items.WATER_BUCKET);
+                     Items.WATER_BUCKET);
         }
 
         // Calculate water placement
@@ -66,13 +65,13 @@ public class MLGAnalyzer {
 
         // Decide if we should place water
         boolean shouldPlace = shouldPlaceWaterNow(distanceToTarget, placementDistance,
-                estimatedImpactTime, isUrgent);
+                estimatedImpactTime);
         String reason = buildPlacementReason(shouldPlace, distanceToTarget, placementDistance,
                 estimatedImpactTime);
 
         return new MLGPredictionResult(shouldPlace, true, landingResult, highestBlock,
                 waterPlacementTarget, distanceToTarget, reason, safetyResult, placementDistance,
-                isUrgent, Items.WATER_BUCKET);
+                Items.WATER_BUCKET);
     }
 
     private static double calculatePlacementDistance(double fallSpeed) {
@@ -132,12 +131,8 @@ public class MLGAnalyzer {
     }
 
     private static boolean shouldPlaceWaterNow(double distanceToTarget, double placementDistance,
-            int estimatedImpactTime, boolean isUrgent) {
+            int estimatedImpactTime) {
         if (estimatedImpactTime <= 10) {
-            return true;
-        }
-
-        if (isUrgent && estimatedImpactTime <= 20) {
             return true;
         }
 
@@ -160,11 +155,10 @@ public class MLGAnalyzer {
         }
     }
 
-    private static MLGPredictionResult createFailResult(String reason, double placementDistance,
-            boolean isUrgent) {
+    private static MLGPredictionResult createFailResult(String reason, double placementDistance) {
         return new MLGPredictionResult(false, false, null, null, null, -1, reason,
                 new SafeLandingBlockChecker.SafetyResult(false, reason), placementDistance,
-                isUrgent, Items.WATER_BUCKET);
+  Items.WATER_BUCKET);
     }
 
     public static BlockPos findHighestHitBlock(java.util.List<BlockPos> hitBlocks) {

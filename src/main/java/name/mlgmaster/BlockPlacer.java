@@ -2,6 +2,7 @@ package name.mlgmaster;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
@@ -9,9 +10,9 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.block.Blocks;
 
-public class WaterPlacer {
+public class BlockPlacer {
 
-    public static boolean executeWaterPlacement(MinecraftClient client, ClientPlayerEntity player,
+    public static boolean executeBlockPlacement(MinecraftClient client, ClientPlayerEntity player,
             MLGPredictionResult prediction) {
 
         if (!prediction.shouldPlace()) {
@@ -19,39 +20,43 @@ public class WaterPlacer {
             return false;
         }
 
-        if (!InventoryManager.ensureItemInHand(player, Items.WATER_BUCKET)) {
-            MLGMaster.LOGGER.warn("No water bucket available");
+        Item targetItem = prediction.getTargetItem();
+        if (!InventoryManager.ensureItemInHand(player, targetItem)) {
+            MLGMaster.LOGGER.warn("Required item {} not available",
+                    targetItem.getName().getString());
             return false;
         }
 
         BlockPos targetLandingBlock = prediction.getHighestLandingBlock();
-        Vec3d waterPlacementTarget = prediction.getPlacementTarget();
-        BlockPos waterPlacementPos = targetLandingBlock.up();
+        Vec3d placementTarget = prediction.getPlacementTarget();
+        BlockPos placementPos = targetLandingBlock.up();
 
+        MLGMaster.LOGGER.info("Placing {} block:", targetItem.getName().getString());
         MLGMaster.LOGGER.info("  Landing block: {} at ({}, {}, {})", targetLandingBlock,
                 targetLandingBlock.getX(), targetLandingBlock.getY(), targetLandingBlock.getZ());
-        MLGMaster.LOGGER.info("  Water position: {} at ({}, {}, {})", waterPlacementPos,
-                waterPlacementPos.getX(), waterPlacementPos.getY(), waterPlacementPos.getZ());
+        MLGMaster.LOGGER.info("  Placement position: {} at ({}, {}, {})", placementPos,
+                placementPos.getX(), placementPos.getY(), placementPos.getZ());
 
         // Check if placement location is clear
-        var blockAtPlacement = client.world.getBlockState(waterPlacementPos);
+        var blockAtPlacement = client.world.getBlockState(placementPos);
         if (blockAtPlacement.getBlock() != Blocks.AIR) {
             MLGMaster.LOGGER.info("Placement location {} is not air: {}, adjusting placement",
-                    waterPlacementPos, blockAtPlacement.getBlock());
+                    placementPos, blockAtPlacement.getBlock());
 
-            targetLandingBlock = waterPlacementPos;
-            waterPlacementPos = targetLandingBlock.up();
-            waterPlacementTarget = Vec3d.ofCenter(waterPlacementPos);
+            targetLandingBlock = placementPos;
+            placementPos = targetLandingBlock.up();
+            placementTarget = Vec3d.ofCenter(placementPos);
 
-            var newBlockAtPlacement = client.world.getBlockState(waterPlacementPos);
+            var newBlockAtPlacement = client.world.getBlockState(placementPos);
             if (newBlockAtPlacement.getBlock() != Blocks.AIR) {
                 MLGMaster.LOGGER.warn("Adjusted placement location {} is also blocked: {}",
-                        waterPlacementPos, newBlockAtPlacement.getBlock());
+                        placementPos, newBlockAtPlacement.getBlock());
                 return tryAlternativePlacements(client, player, prediction);
             }
         }
 
-        return executePlacementWithMixin(client, player, targetLandingBlock, waterPlacementTarget);
+        return executePlacementWithMixin(client, player, targetLandingBlock, placementTarget,
+                targetItem);
     }
 
     private static boolean tryAlternativePlacements(MinecraftClient client,
@@ -74,8 +79,9 @@ public class WaterPlacer {
             }
 
             Vec3d currentPos = player.getPos();
-            if (SafeLandingBlockChecker.shouldSkipWaterPlacement(client, player, altBlock,
-                    currentPos)) {
+            // For non-water blocks, we might not need to check landing safety
+            if (prediction.getTargetItem() == Items.WATER_BUCKET && SafeLandingBlockChecker
+                    .shouldSkipWaterPlacement(client, player, altBlock, currentPos)) {
                 continue;
             }
 
@@ -84,7 +90,8 @@ public class WaterPlacer {
                 MLGMaster.LOGGER.info("Found alternative placement at {} (on block {})",
                         altPlacement, altBlock);
                 Vec3d altTarget = Vec3d.ofCenter(altPlacement);
-                return executePlacementWithMixin(client, player, altBlock, altTarget);
+                return executePlacementWithMixin(client, player, altBlock, altTarget,
+                        prediction.getTargetItem());
             }
         }
 
@@ -93,8 +100,9 @@ public class WaterPlacer {
     }
 
     private static boolean executePlacementWithMixin(MinecraftClient client,
-            ClientPlayerEntity player, BlockPos targetBlock, Vec3d lookTarget) {
+            ClientPlayerEntity player, BlockPos targetBlock, Vec3d lookTarget, Item targetItem) {
         MLGMaster.LOGGER.info("Executing placement with mixin accessor:");
+        MLGMaster.LOGGER.info("  Target item: {}", targetItem.getName().getString());
         MLGMaster.LOGGER.info("  Target block: {}", targetBlock);
         MLGMaster.LOGGER.info("  Look target: ({}, {}, {})", lookTarget.x, lookTarget.y,
                 lookTarget.z);
@@ -111,28 +119,31 @@ public class WaterPlacer {
             MLGMaster.LOGGER.info("Player main hand item: {}", player.getMainHandStack().getItem());
             MLGMaster.LOGGER.info("Player off hand item: {}", player.getOffHandStack().getItem());
 
-            // Strategy 1: Direct item placement (prioritized for water buckets)
+            // Strategy 1: Direct item placement (works for most items)
             MLGMaster.LOGGER.info("Strategy 1: Direct item placement");
             boolean itemResult = MLGBlockPlacer.placeItem(client, player, Hand.MAIN_HAND);
             MLGMaster.LOGGER.info("  Main hand result: {}", itemResult);
 
             if (itemResult) {
-                MLGMaster.LOGGER.info("SUCCESS! Water placed with main hand item interaction");
+                MLGMaster.LOGGER.info("SUCCESS! {} placed with main hand item interaction",
+                        targetItem.getName().getString());
                 return true;
             }
 
             // Strategy 2: Try offhand if available
-            if (player.getOffHandStack().getItem().toString().contains("water_bucket")) {
+            if (player.getOffHandStack().getItem() == targetItem) {
                 MLGMaster.LOGGER.info("Strategy 2: Offhand item placement");
                 boolean offhandResult = MLGBlockPlacer.placeItem(client, player, Hand.OFF_HAND);
                 MLGMaster.LOGGER.info("  Offhand result: {}", offhandResult);
 
                 if (offhandResult) {
-                    MLGMaster.LOGGER.info("SUCCESS! Water placed with offhand item interaction");
+                    MLGMaster.LOGGER.info("SUCCESS! {} placed with offhand item interaction",
+                            targetItem.getName().getString());
                     return true;
                 }
             } else {
-                MLGMaster.LOGGER.info("Strategy 2 skipped: No water bucket in offhand");
+                MLGMaster.LOGGER.info("Strategy 2 skipped: No {} in offhand",
+                        targetItem.getName().getString());
             }
 
             // Strategy 3: Block interaction with specific targeting
@@ -144,7 +155,8 @@ public class WaterPlacer {
             MLGMaster.LOGGER.info("  Block interaction result: {}", blockResult);
 
             if (blockResult) {
-                MLGMaster.LOGGER.info("SUCCESS! Water placed with block interaction");
+                MLGMaster.LOGGER.info("SUCCESS! {} placed with block interaction",
+                        targetItem.getName().getString());
                 return true;
             }
 
@@ -155,23 +167,27 @@ public class WaterPlacer {
             MLGMaster.LOGGER.info("  Internal block interaction result: {}", internalResult);
 
             if (internalResult) {
-                MLGMaster.LOGGER.info("SUCCESS! Water placed with internal block interaction");
+                MLGMaster.LOGGER.info("SUCCESS! {} placed with internal block interaction",
+                        targetItem.getName().getString());
                 return true;
             }
 
-            // Strategy 5: Water placement with comprehensive approach
-            MLGMaster.LOGGER.info("Strategy 5: Comprehensive water placement");
-            boolean waterResult =
-                    MLGBlockPlacer.placeWater(client, player, Hand.MAIN_HAND, targetBlock, hitPos);
-            MLGMaster.LOGGER.info("  Comprehensive water placement result: {}", waterResult);
+            // Strategy 5: Special handling for water buckets (legacy compatibility)
+            if (targetItem == Items.WATER_BUCKET) {
+                MLGMaster.LOGGER.info("Strategy 5: Water-specific placement");
+                boolean waterResult = MLGBlockPlacer.placeWater(client, player, Hand.MAIN_HAND,
+                        targetBlock, hitPos);
+                MLGMaster.LOGGER.info("  Water-specific placement result: {}", waterResult);
 
-            if (waterResult) {
-                MLGMaster.LOGGER.info("SUCCESS! Water placed with comprehensive approach");
-                return true;
+                if (waterResult) {
+                    MLGMaster.LOGGER.info("SUCCESS! Water placed with water-specific approach");
+                    return true;
+                }
             }
 
             MLGMaster.LOGGER.error("ALL PLACEMENT STRATEGIES FAILED!");
             MLGMaster.LOGGER.error("Failure analysis:");
+            MLGMaster.LOGGER.error("  Target item: {}", targetItem.getName().getString());
             MLGMaster.LOGGER.error("  Target block: {} (state: {})", targetBlock,
                     client.world.getBlockState(targetBlock));
             MLGMaster.LOGGER.error("  Player distance to target: {} blocks",
@@ -184,7 +200,7 @@ public class WaterPlacer {
             return false;
 
         } catch (Exception e) {
-            MLGMaster.LOGGER.error("ERROR during mixin placement execution: {}", e.getMessage());
+            MLGMaster.LOGGER.error("ERROR during placement execution: {}", e.getMessage());
             e.printStackTrace();
             return false;
         } finally {
@@ -193,4 +209,3 @@ public class WaterPlacer {
         }
     }
 }
-

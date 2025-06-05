@@ -127,24 +127,12 @@ public class SafeLandingBlockChecker {
      */
     private static SafetyResult checkScaffoldingWithCrouch(MinecraftClient client,
             ClientPlayerEntity player, Vec3d currentPos, BlockPos scaffoldingPos) {
-        double fallDistance = currentPos.y - scaffoldingPos.getY();
-
-        MLGMaster.LOGGER.info("Checking scaffolding safety: fall distance = {} blocks",
-                fallDistance);
-
-        if (fallDistance >= 150.0) {
-            return new SafetyResult(false, String.format(
-                    "Scaffolding unsafe for %.1f block fall (exceeds 150 block limit) - need water clutch",
-                    fallDistance));
-        }
 
         // This line activates the mixin crouch
         ScaffoldingCrouchManager.activateScaffoldingCrouch(player, client);
 
-        MLGMaster.LOGGER.info("Scaffolding requires crouching - activated crouch for {} block fall",
-                fallDistance);
-        return new SafetyResult(true, String.format(
-                "Scaffolding safe with forced crouch for %.1f block fall", fallDistance), true);
+        return new SafetyResult(true, String.format("Scaffolding safe with forced crouch for fall"),
+                true);
     }
 
     /**

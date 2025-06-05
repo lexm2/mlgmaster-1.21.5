@@ -14,7 +14,6 @@ public class MLGPredictionResult {
     private final String reason;
     private final SafeLandingBlockChecker.SafetyResult safetyResult;
     private final double placementDistance;
-    private final boolean isUrgentPlacement;
     private final Item targetItem;
     
     public MLGPredictionResult(boolean shouldPlace, boolean willLand, 
@@ -22,8 +21,7 @@ public class MLGPredictionResult {
                               BlockPos highestLandingBlock, Vec3d placementTarget,
                               double distanceToTarget, String reason,
                               SafeLandingBlockChecker.SafetyResult safetyResult,
-                              double placementDistance, boolean isUrgentPlacement,
-                              Item targetItem) {
+                              double placementDistance, Item targetItem) {
         this.shouldPlace = shouldPlace;
         this.willLand = willLand;
         this.landingResult = landingResult;
@@ -33,7 +31,6 @@ public class MLGPredictionResult {
         this.reason = reason;
         this.safetyResult = safetyResult;
         this.placementDistance = placementDistance;
-        this.isUrgentPlacement = isUrgentPlacement;
         this.targetItem = targetItem;
     }
     
@@ -46,7 +43,6 @@ public class MLGPredictionResult {
     public String getReason() { return reason; }
     public SafeLandingBlockChecker.SafetyResult getSafetyResult() { return safetyResult; }
     public double getPlacementDistance() { return placementDistance; }
-    public boolean isUrgentPlacement() { return isUrgentPlacement; }
     public boolean isWithinPlacementDistance() { return distanceToTarget <= placementDistance && distanceToTarget > 0; }
     public Item getTargetItem() { return targetItem; }
 }

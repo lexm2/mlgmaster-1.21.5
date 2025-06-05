@@ -5,11 +5,11 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
-public class WaterMLGHandler {
+public class MLGHandler {
     private static boolean isActive = false;
     private static long lastPredictionTime = 0;
     private static final long PREDICTION_INTERVAL = 50;
-    private static final double FALL_TRIGGER_DISTANCE = 5.0;
+    private static final double FALL_TRIGGER_DISTANCE = 4.5;
 
     public static void onHighFrequencyTick() {
         MinecraftClient client = MinecraftClient.getInstance();

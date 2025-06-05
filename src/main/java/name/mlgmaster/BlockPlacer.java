@@ -31,12 +31,6 @@ public class BlockPlacer {
         Vec3d placementTarget = prediction.getPlacementTarget();
         BlockPos placementPos = targetLandingBlock.up();
 
-        MLGMaster.LOGGER.info("Placing {} block:", targetItem.getName().getString());
-        MLGMaster.LOGGER.info("  Landing block: {} at ({}, {}, {})", targetLandingBlock,
-                targetLandingBlock.getX(), targetLandingBlock.getY(), targetLandingBlock.getZ());
-        MLGMaster.LOGGER.info("  Placement position: {} at ({}, {}, {})", placementPos,
-                placementPos.getX(), placementPos.getY(), placementPos.getZ());
-
         // Check if placement location is clear
         var blockAtPlacement = client.world.getBlockState(placementPos);
         if (blockAtPlacement.getBlock() != Blocks.AIR) {
@@ -79,7 +73,6 @@ public class BlockPlacer {
             }
 
             Vec3d currentPos = player.getPos();
-            // For non-water blocks, we might not need to check landing safety
             if (prediction.getTargetItem() == Items.WATER_BUCKET && SafeLandingBlockChecker
                     .shouldSkipWaterPlacement(client, player, altBlock, currentPos)) {
                 continue;
@@ -101,11 +94,6 @@ public class BlockPlacer {
 
     private static boolean executePlacementWithMixin(MinecraftClient client,
             ClientPlayerEntity player, BlockPos targetBlock, Vec3d lookTarget, Item targetItem) {
-        MLGMaster.LOGGER.info("Executing placement with mixin accessor:");
-        MLGMaster.LOGGER.info("  Target item: {}", targetItem.getName().getString());
-        MLGMaster.LOGGER.info("  Target block: {}", targetBlock);
-        MLGMaster.LOGGER.info("  Look target: ({}, {}, {})", lookTarget.x, lookTarget.y,
-                lookTarget.z);
 
         PlayerRotationManager.storeOriginalRotation(player);
 
@@ -119,18 +107,17 @@ public class BlockPlacer {
             MLGMaster.LOGGER.info("Player main hand item: {}", player.getMainHandStack().getItem());
             MLGMaster.LOGGER.info("Player off hand item: {}", player.getOffHandStack().getItem());
 
-            // Strategy 1: Direct item placement (works for most items)
-            MLGMaster.LOGGER.info("Strategy 1: Direct item placement");
-            boolean itemResult = MLGBlockPlacer.placeItem(client, player, Hand.MAIN_HAND);
-            MLGMaster.LOGGER.info("  Main hand result: {}", itemResult);
-
-            if (itemResult) {
-                MLGMaster.LOGGER.info("SUCCESS! {} placed with main hand item interaction",
-                        targetItem.getName().getString());
-                return true;
+            if (player.getMainHandStack().getItem() == targetItem) {
+                boolean itemResult = MLGBlockPlacer.placeItem(client, player, Hand.MAIN_HAND);
+                if (itemResult) {
+                    MLGMaster.LOGGER.info("SUCCESS! {} placed with main hand item interaction",
+                            targetItem.getName().getString());
+                    return true;
+                }
             }
 
-            // Strategy 2: Try offhand if available
+
+
             if (player.getOffHandStack().getItem() == targetItem) {
                 MLGMaster.LOGGER.info("Strategy 2: Offhand item placement");
                 boolean offhandResult = MLGBlockPlacer.placeItem(client, player, Hand.OFF_HAND);
@@ -146,44 +133,44 @@ public class BlockPlacer {
                         targetItem.getName().getString());
             }
 
-            // Strategy 3: Block interaction with specific targeting
-            MLGMaster.LOGGER.info("Strategy 3: Block interaction placement");
-            Vec3d hitPos = new Vec3d(targetBlock.getX() + 0.5, targetBlock.getY() + 1.0,
-                    targetBlock.getZ() + 0.5);
-            boolean blockResult = MLGBlockPlacer.interactBlock(client, player, Hand.MAIN_HAND,
-                    targetBlock, hitPos, Direction.UP);
-            MLGMaster.LOGGER.info("  Block interaction result: {}", blockResult);
+            // // Strategy 3: Block interaction with specific targeting
+            // MLGMaster.LOGGER.info("Strategy 3: Block interaction placement");
+            // Vec3d hitPos = new Vec3d(targetBlock.getX() + 0.5, targetBlock.getY() + 1.0,
+            //         targetBlock.getZ() + 0.5);
+            // boolean blockResult = MLGBlockPlacer.interactBlock(client, player, Hand.MAIN_HAND,
+            //         targetBlock, hitPos, Direction.UP);
+            // MLGMaster.LOGGER.info("  Block interaction result: {}", blockResult);
 
-            if (blockResult) {
-                MLGMaster.LOGGER.info("SUCCESS! {} placed with block interaction",
-                        targetItem.getName().getString());
-                return true;
-            }
+            // if (blockResult) {
+            //     MLGMaster.LOGGER.info("SUCCESS! {} placed with block interaction",
+            //             targetItem.getName().getString());
+            //     return true;
+            // }
 
-            // Strategy 4: Internal block interaction
-            MLGMaster.LOGGER.info("Strategy 4: Internal block interaction placement");
-            boolean internalResult = MLGBlockPlacer.interactBlockInternal(client, player,
-                    Hand.MAIN_HAND, targetBlock, hitPos, Direction.UP);
-            MLGMaster.LOGGER.info("  Internal block interaction result: {}", internalResult);
+            // // Strategy 4: Internal block interaction
+            // MLGMaster.LOGGER.info("Strategy 4: Internal block interaction placement");
+            // boolean internalResult = MLGBlockPlacer.interactBlockInternal(client, player,
+            //         Hand.MAIN_HAND, targetBlock, hitPos, Direction.UP);
+            // MLGMaster.LOGGER.info("  Internal block interaction result: {}", internalResult);
 
-            if (internalResult) {
-                MLGMaster.LOGGER.info("SUCCESS! {} placed with internal block interaction",
-                        targetItem.getName().getString());
-                return true;
-            }
+            // if (internalResult) {
+            //     MLGMaster.LOGGER.info("SUCCESS! {} placed with internal block interaction",
+            //             targetItem.getName().getString());
+            //     return true;
+            // }
 
-            // Strategy 5: Special handling for water buckets (legacy compatibility)
-            if (targetItem == Items.WATER_BUCKET) {
-                MLGMaster.LOGGER.info("Strategy 5: Water-specific placement");
-                boolean waterResult = MLGBlockPlacer.placeWater(client, player, Hand.MAIN_HAND,
-                        targetBlock, hitPos);
-                MLGMaster.LOGGER.info("  Water-specific placement result: {}", waterResult);
+            // // Strategy 5: Special handling for water buckets (legacy compatibility)
+            // if (targetItem == Items.WATER_BUCKET) {
+            //     MLGMaster.LOGGER.info("Strategy 5: Water-specific placement");
+            //     boolean waterResult = MLGBlockPlacer.placeWater(client, player, Hand.MAIN_HAND,
+            //             targetBlock, hitPos);
+            //     MLGMaster.LOGGER.info("  Water-specific placement result: {}", waterResult);
 
-                if (waterResult) {
-                    MLGMaster.LOGGER.info("SUCCESS! Water placed with water-specific approach");
-                    return true;
-                }
-            }
+            //     if (waterResult) {
+            //         MLGMaster.LOGGER.info("SUCCESS! Water placed with water-specific approach");
+            //         return true;
+            //     }
+            // }
 
             MLGMaster.LOGGER.error("ALL PLACEMENT STRATEGIES FAILED!");
             MLGMaster.LOGGER.error("Failure analysis:");

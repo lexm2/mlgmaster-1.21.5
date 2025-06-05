@@ -123,17 +123,48 @@ public class SafeLandingBlockChecker {
     }
 
     /**
-     * Check scaffolding safety and handle crouch requirement
+     * Check scaffolding safety and handle crouch requirement Only considers it safe if the player's
+     * center will land on the scaffolding block
      */
     private static SafetyResult checkScaffoldingWithCrouch(MinecraftClient client,
             ClientPlayerEntity player, Vec3d currentPos, BlockPos scaffoldingPos) {
+        double fallDistance = currentPos.y - scaffoldingPos.getY();
+
+        if (fallDistance >= 150.0) {
+            return new SafetyResult(false, String.format(
+                    "Scaffolding unsafe for %.1f block fall (exceeds 150 block limit) - need water clutch",
+                    fallDistance));
+        }
+
+        // Check if player's center will land on the scaffolding block
+        double playerCenterX = currentPos.x;
+        double playerCenterZ = currentPos.z;
+
+        // Scaffolding block bounds (from block position to block position + 1)
+        double blockMinX = scaffoldingPos.getX();
+        double blockMaxX = scaffoldingPos.getX() + 1.0;
+        double blockMinZ = scaffoldingPos.getZ();
+        double blockMaxZ = scaffoldingPos.getZ() + 1.0;
+
+        boolean centerWillHitBlock = (playerCenterX >= blockMinX && playerCenterX <= blockMaxX)
+                && (playerCenterZ >= blockMinZ && playerCenterZ <= blockMaxZ);
+
+        if (!centerWillHitBlock) {
+            return new SafetyResult(false, String.format(
+                    "Player center (%.2f, %.2f) will not land on scaffolding block at (%d, %d) - need water clutch",
+                    playerCenterX, playerCenterZ, scaffoldingPos.getX(), scaffoldingPos.getZ()));
+        }
 
         // This line activates the mixin crouch
         ScaffoldingCrouchManager.activateScaffoldingCrouch(player, client);
 
-        return new SafetyResult(true, String.format("Scaffolding safe with forced crouch for fall"),
-                true);
+        MLGMaster.LOGGER.info("Scaffolding requires crouching - activated crouch for {} block fall",
+                fallDistance);
+        return new SafetyResult(true, String.format(
+                "Scaffolding safe with forced crouch for %.1f block fall - player center will hit block",
+                fallDistance), true);
     }
+
 
     /**
      * Simple check if we should skip water placement

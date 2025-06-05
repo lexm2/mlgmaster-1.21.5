@@ -15,7 +15,7 @@ public class MLGMaster implements ModInitializer {
 	public void onInitialize() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			if (client != null && client.player != null && client.world != null) {
-				WaterMLGHandler.onHighFrequencyTick();
+				MLGHandler.onHighFrequencyTick();
 			}
 		});
 

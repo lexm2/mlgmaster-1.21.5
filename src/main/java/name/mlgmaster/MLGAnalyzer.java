@@ -3,6 +3,7 @@ package name.mlgmaster;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
@@ -55,7 +56,7 @@ public class MLGAnalyzer {
         if (safetyResult.isSafe()) {
             return new MLGPredictionResult(false, true, landingResult, highestBlock, null, -1,
                     "Safe landing: " + safetyResult.getReason(), safetyResult, placementDistance,
-                    isUrgent);
+                    isUrgent, Items.WATER_BUCKET);
         }
 
         // Calculate water placement
@@ -71,7 +72,7 @@ public class MLGAnalyzer {
 
         return new MLGPredictionResult(shouldPlace, true, landingResult, highestBlock,
                 waterPlacementTarget, distanceToTarget, reason, safetyResult, placementDistance,
-                isUrgent);
+                isUrgent, Items.WATER_BUCKET);
     }
 
     private static double calculatePlacementDistance(double fallSpeed) {
@@ -163,7 +164,7 @@ public class MLGAnalyzer {
             boolean isUrgent) {
         return new MLGPredictionResult(false, false, null, null, null, -1, reason,
                 new SafeLandingBlockChecker.SafetyResult(false, reason), placementDistance,
-                isUrgent);
+                isUrgent, Items.WATER_BUCKET);
     }
 
     public static BlockPos findHighestHitBlock(java.util.List<BlockPos> hitBlocks) {

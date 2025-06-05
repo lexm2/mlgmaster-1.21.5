@@ -58,7 +58,7 @@ public class WaterMLGHandler {
 
         if (prediction.shouldPlace()) {
             BlockPos targetBlock = prediction.getHighestLandingBlock();
-            Vec3d targetPos = prediction.getWaterPlacementTarget();
+            Vec3d targetPos = prediction.getPlacementTarget();
 
             MLGMaster.LOGGER.info("EXECUTING DISTANCE-BASED PLACEMENT:");
             MLGMaster.LOGGER.info("Target: {} at {}", targetBlock, targetPos);

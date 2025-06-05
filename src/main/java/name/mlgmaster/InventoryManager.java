@@ -2,28 +2,29 @@ package name.mlgmaster;
 
 import name.mlgmaster.mixin.PlayerInventoryAccessor;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 
 public class InventoryManager {
 
-    public static boolean ensureWaterBucketInHand(ClientPlayerEntity player) {
+    public static boolean ensureItemInHand(ClientPlayerEntity player, Item targetItem) {
         ItemStack mainHand = player.getMainHandStack();
-        if (mainHand.getItem() == Items.WATER_BUCKET) {
+        if (mainHand.getItem() == targetItem) {
             return true;
         }
 
-        MLGMaster.LOGGER.info("Searching for water bucket in hotbar...");
+        MLGMaster.LOGGER.info("Searching for {} in hotbar...", targetItem.getName().getString());
 
-        // Search hotbar for water bucket
+        // Search hotbar for target item
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
-            if (stack.getItem() == Items.WATER_BUCKET) {
+            if (stack.getItem() == targetItem) {
                 return switchToSlot(player, i);
             }
         }
 
-        MLGMaster.LOGGER.warn("No water bucket found in hotbar");
+        MLGMaster.LOGGER.warn("No {} found in hotbar", targetItem.getName().getString());
         return false;
     }
 
@@ -32,7 +33,7 @@ public class InventoryManager {
             PlayerInventoryAccessor inventoryAccessor =
                     (PlayerInventoryAccessor) player.getInventory();
             inventoryAccessor.setSelectedSlot(slot);
-            MLGMaster.LOGGER.info("Switched to water bucket in slot {}", slot);
+            MLGMaster.LOGGER.info("Switched to item in slot {}", slot);
             return true;
         } catch (Exception e) {
             MLGMaster.LOGGER.error("Failed to switch to slot {}: {}", slot, e.getMessage());
@@ -40,16 +41,16 @@ public class InventoryManager {
         }
     }
 
-    public static boolean hasWaterBucket(ClientPlayerEntity player) {
+    public static boolean hasItem(ClientPlayerEntity player, Item targetItem) {
         // Check main hand first
-        if (player.getMainHandStack().getItem() == Items.WATER_BUCKET) {
+        if (player.getMainHandStack().getItem() == targetItem) {
             return true;
         }
 
         // Check hotbar
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
-            if (stack.getItem() == Items.WATER_BUCKET) {
+            if (stack.getItem() == targetItem) {
                 return true;
             }
         }

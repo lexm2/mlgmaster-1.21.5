@@ -2,6 +2,7 @@ package name.mlgmaster;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -18,13 +19,13 @@ public class WaterPlacer {
             return false;
         }
 
-        if (!InventoryManager.ensureWaterBucketInHand(player)) {
+        if (!InventoryManager.ensureItemInHand(player, Items.WATER_BUCKET)) {
             MLGMaster.LOGGER.warn("No water bucket available");
             return false;
         }
 
         BlockPos targetLandingBlock = prediction.getHighestLandingBlock();
-        Vec3d waterPlacementTarget = prediction.getWaterPlacementTarget();
+        Vec3d waterPlacementTarget = prediction.getPlacementTarget();
         BlockPos waterPlacementPos = targetLandingBlock.up();
 
         MLGMaster.LOGGER.info("  Landing block: {} at ({}, {}, {})", targetLandingBlock,

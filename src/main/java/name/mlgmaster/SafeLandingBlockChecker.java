@@ -57,9 +57,6 @@ public class SafeLandingBlockChecker {
         BlockState landingState = client.world.getBlockState(landingBlock);
         Block landingBlockType = landingState.getBlock();
 
-        MLGMaster.LOGGER.info("Checking landing safety for block: {} at position: {}",
-                landingBlockType.getName().getString(), landingBlock);
-
         // Water is always safe
         if (landingBlockType == Blocks.WATER) {
             return new SafetyResult(true, "Water always prevents fall damage");

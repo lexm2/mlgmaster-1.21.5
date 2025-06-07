@@ -12,7 +12,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 
 public class LandingPredictor {
-
+    // TODO: use physics class
     // Physics constants matching Minecraft
     private static final double GRAVITY = 0.08;
     private static final double AIR_DRAG = 0.98;
@@ -83,28 +83,14 @@ public class LandingPredictor {
 
     public static HitboxLandingResult predictHitboxLanding(MinecraftClient client,
             ClientPlayerEntity player, Vec3d currentPos, Vec3d velocity) {
-        MLGMaster.LOGGER.info("Starting landing prediction with horizontal movement");
-        MLGMaster.LOGGER.info("Position: {}, Velocity: {}", currentPos, velocity);
 
         Box playerHitbox = player.getBoundingBox();
-        double hitboxWidth = playerHitbox.getLengthX();
-        double hitboxDepth = playerHitbox.getLengthZ();
-        double hitboxHeight = playerHitbox.getLengthY();
-
-        MLGMaster.LOGGER.info("Hitbox: {}x{}x{}", hitboxWidth, hitboxDepth, hitboxHeight);
-
         CollisionResult collision =
                 simulateMovementWithCollision(client, player, currentPos, velocity, playerHitbox);
 
         if (!collision.hasCollision()) {
-            MLGMaster.LOGGER.warn("No collision detected in simulation");
             return null;
         }
-
-        MLGMaster.LOGGER.info("Landing predicted at: {} after {} steps",
-                collision.collisionPosition, collision.simulationSteps);
-        MLGMaster.LOGGER.info("Horizontal displacement: {}", collision.horizontalDisplacement);
-        MLGMaster.LOGGER.info("Hit {} blocks", collision.collidingBlocks.size());
 
         BlockPos bestLandingBlock = chooseBestLandingBlock(collision.collidingBlocks);
         SafeLandingBlockChecker.SafetyResult safetyResult = SafeLandingBlockChecker
@@ -152,9 +138,6 @@ public class LandingPredictor {
                 // Calculate horizontal displacement from start to collision point
                 Vec3d currentHorizontalPos = new Vec3d(nextPos.x, 0, nextPos.z);
                 Vec3d horizontalDisplacement = currentHorizontalPos.subtract(startHorizontalPos);
-
-                MLGMaster.LOGGER.info("Collision at step {}: horizontal displacement = {}", step,
-                        horizontalDisplacement);
 
                 // Add all colliding blocks
                 for (BlockPos blockPos : stepCollisions) {

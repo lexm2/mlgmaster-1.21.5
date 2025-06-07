@@ -14,8 +14,6 @@ public class InventoryManager {
             return true;
         }
 
-        MLGMaster.LOGGER.info("Searching for {} in hotbar...", targetItem.getName().getString());
-
         // Search hotbar for target item
         for (int i = 0; i < 9; i++) {
             ItemStack stack = player.getInventory().getStack(i);
@@ -33,7 +31,6 @@ public class InventoryManager {
             PlayerInventoryAccessor inventoryAccessor =
                     (PlayerInventoryAccessor) player.getInventory();
             inventoryAccessor.setSelectedSlot(slot);
-            MLGMaster.LOGGER.info("Switched to item in slot {}", slot);
             return true;
         } catch (Exception e) {
             MLGMaster.LOGGER.error("Failed to switch to slot {}: {}", slot, e.getMessage());

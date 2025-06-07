@@ -14,8 +14,6 @@ public class PlayerRotationManager {
             originalYaw = player.getYaw();
             originalPitch = player.getPitch();
             rotationStored = true;
-            MLGMaster.LOGGER.info("Stored original rotation: Yaw={} | Pitch={}", originalYaw,
-                    originalPitch);
         }
     }
 
@@ -40,9 +38,6 @@ public class PlayerRotationManager {
         // Set rotation
         player.setYaw((float) yaw);
         player.setPitch((float) pitch);
-
-        MLGMaster.LOGGER.info("Looking at target: {} | Set rotation: Yaw={} | Pitch={}", target,
-                yaw, String.format("%.1f", pitch));
     }
 
     public static void setLookDown(ClientPlayerEntity player) {
@@ -57,8 +52,6 @@ public class PlayerRotationManager {
             player.setYaw(originalYaw);
             player.setPitch(originalPitch);
             rotationStored = false;
-            MLGMaster.LOGGER.info("Restored original rotation: Yaw={} | Pitch={}", originalYaw,
-                    originalPitch);
         }
     }
 

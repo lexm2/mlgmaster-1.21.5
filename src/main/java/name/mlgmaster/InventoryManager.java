@@ -4,7 +4,6 @@ import name.mlgmaster.mixin.PlayerInventoryAccessor;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 
 public class InventoryManager {
 

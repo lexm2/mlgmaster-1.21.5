@@ -7,7 +7,7 @@ import net.minecraft.util.math.Vec3d;
 public class MLGPredictionResult {
     private final boolean shouldPlace;
     private final boolean willLand;
-    private final LandingPredictor.HitboxLandingResult landingResult;
+    private final HitboxLandingResult landingResult;
     private final BlockPos highestLandingBlock;
     private final Vec3d placementTarget;
     private final double distanceToTarget;
@@ -17,7 +17,7 @@ public class MLGPredictionResult {
     private final Item targetItem;
     
     public MLGPredictionResult(boolean shouldPlace, boolean willLand, 
-                              LandingPredictor.HitboxLandingResult landingResult,
+                              HitboxLandingResult landingResult,
                               BlockPos highestLandingBlock, Vec3d placementTarget,
                               double distanceToTarget, String reason,
                               SafeLandingBlockChecker.SafetyResult safetyResult,
@@ -36,7 +36,7 @@ public class MLGPredictionResult {
     
     public boolean shouldPlace() { return shouldPlace; }
     public boolean willLand() { return willLand; }
-    public LandingPredictor.HitboxLandingResult getLandingResult() { return landingResult; }
+    public HitboxLandingResult getLandingResult() { return landingResult; }
     public BlockPos getHighestLandingBlock() { return highestLandingBlock; }
     public Vec3d getPlacementTarget() { return placementTarget; }
     public double getDistanceToTarget() { return distanceToTarget; }
@@ -45,4 +45,10 @@ public class MLGPredictionResult {
     public double getPlacementDistance() { return placementDistance; }
     public boolean isWithinPlacementDistance() { return distanceToTarget <= placementDistance && distanceToTarget > 0; }
     public Item getTargetItem() { return targetItem; }
+    
+    @Override
+    public String toString() {
+        return String.format("MLGResult[shouldPlace=%s, willLand=%s, target=%s, distance=%.1f, reason='%s']",
+            shouldPlace, willLand, highestLandingBlock, distanceToTarget, reason);
+    }
 }

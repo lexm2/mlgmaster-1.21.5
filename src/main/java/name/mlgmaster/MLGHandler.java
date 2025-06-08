@@ -66,30 +66,34 @@ public class MLGHandler {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         Vec3d velocity = player.getVelocity();
+        MLGPredictionResult prediction =
+                FallPredictionSystem.analyzeFallAndPlacement(client, player, velocity);
+
 
         List<MLGApplicabilityResult> applicabilityResults =
-                evaluateMLGTypes(client, player, velocity);
+                evaluateMLGTypes(client, player, velocity, prediction);
 
         handleHighFrequencyTimer(client, player, velocity, applicabilityResults);
 
         if (velocity.y >= -0.1 || player.isOnGround()) {
-            handleCleanup(client, player);
+            handleCleanup(client, player, prediction);
             return;
         }
 
         MLGApplicabilityResult chosenMLG = selectBestMLGType(applicabilityResults);
 
+
         if (chosenMLG != null) {
-            executeChosenMLG(client, player, chosenMLG);
+            executeChosenMLG(client, player, chosenMLG, prediction);
         }
     }
 
     private static List<MLGApplicabilityResult> evaluateMLGTypes(MinecraftClient client,
-            ClientPlayerEntity player, Vec3d velocity) {
+            ClientPlayerEntity player, Vec3d velocity, MLGPredictionResult prediction) {
         List<MLGApplicabilityResult> results = new ArrayList<>();
 
         for (MLGType mlgType : mlgTypes) {
-            boolean applicable = mlgType.isApplicable(client, player, velocity);
+            boolean applicable = mlgType.isApplicable(client, player, velocity, prediction);
             int priority = mlgType.getPriority();
 
             results.add(
@@ -126,7 +130,7 @@ public class MLGHandler {
     }
 
     private static void executeChosenMLG(MinecraftClient client, ClientPlayerEntity player,
-            MLGApplicabilityResult chosenMLG) {
+            MLGApplicabilityResult chosenMLG, MLGPredictionResult prediction) {
         long currentTime = System.currentTimeMillis();
 
         if (currentTime - lastPredictionTime < getDynamicInterval(player.getVelocity().y)) {
@@ -137,8 +141,8 @@ public class MLGHandler {
 
         MLGType mlgType = chosenMLG.getType();
 
-        if (mlgType.canExecute(client, player)) {
-            if (mlgType.execute(client, player)) {
+        if (mlgType.canExecute(client, player, prediction)) {
+            if (mlgType.execute(client, player, prediction)) {
                 mlgType.onSuccessfulPlacement(client, player, currentTime);
                 lastPredictionTime = currentTime + 40;
 
@@ -155,7 +159,8 @@ public class MLGHandler {
         return absFallSpeed > 1.0 ? PREDICTION_INTERVAL / 2 : PREDICTION_INTERVAL;
     }
 
-    private static void handleCleanup(MinecraftClient client, ClientPlayerEntity player) {
+    private static void handleCleanup(MinecraftClient client, ClientPlayerEntity player,
+            MLGPredictionResult prediction) {
         ScaffoldingCrouchManager.releaseScaffoldingCrouch();
 
         for (MLGType mlgType : mlgTypes) {

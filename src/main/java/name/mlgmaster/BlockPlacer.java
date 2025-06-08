@@ -6,7 +6,6 @@ import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.block.Blocks;
 
@@ -31,7 +30,6 @@ public class BlockPlacer {
         Vec3d placementTarget = prediction.getPlacementTarget();
         BlockPos placementPos = targetLandingBlock.up();
 
-        // Check if placement location is clear
         var blockAtPlacement = client.world.getBlockState(placementPos);
         if (blockAtPlacement.getBlock() != Blocks.AIR) {
             MLGMaster.LOGGER.info("Placement location {} is not air: {}, adjusting placement",
@@ -57,7 +55,7 @@ public class BlockPlacer {
             ClientPlayerEntity player, MLGPredictionResult prediction) {
         MLGMaster.LOGGER.info("Trying alternative placements...");
 
-        LandingPredictor.HitboxLandingResult landingResult = prediction.getLandingResult();
+        HitboxLandingResult landingResult = prediction.getLandingResult();
         if (landingResult == null) {
             MLGMaster.LOGGER.warn("No landing result available for alternatives");
             return false;

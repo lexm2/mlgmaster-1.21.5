@@ -10,7 +10,7 @@ public abstract class MLGType {
      * Checks if this MLG type is applicable for the current situation
      * This method should contain all fall detection logic specific to this MLG type
      */
-    public abstract boolean isApplicable(MinecraftClient client, ClientPlayerEntity player, Vec3d velocity);
+    public abstract boolean isApplicable(MinecraftClient client, ClientPlayerEntity player, Vec3d velocity, MLGPredictionResult prediction);
 
     /**
      * Checks if this MLG type can be executed (has required items, etc.)
@@ -18,19 +18,9 @@ public abstract class MLGType {
     public abstract boolean canExecute(MinecraftClient client, ClientPlayerEntity player, MLGPredictionResult prediction);
 
     /**
-     * Check if this MLG type can execute right now (without prediction)
-     */
-    public abstract boolean canExecute(MinecraftClient client, ClientPlayerEntity player);
-
-    /**
      * Execute the MLG placement with prediction
      */
     public abstract boolean execute(MinecraftClient client, ClientPlayerEntity player, MLGPredictionResult prediction);
-
-    /**
-     * Execute the MLG placement without prediction
-     */
-    public abstract boolean execute(MinecraftClient client, ClientPlayerEntity player);
 
     /**
      * Whether this MLG type requires high frequency timer when applicable
@@ -40,14 +30,7 @@ public abstract class MLGType {
     /**
      * Called when the MLG placement was successful (with prediction)
      */
-    public abstract void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player,
-            MLGPredictionResult prediction, long currentTime);
-
-    /**
-     * Called when placement is successful (without prediction)
-     */
-    public abstract void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player,
-            long timestamp);
+    public abstract void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player, long currentTime);
 
     /**
      * Called when the player lands or stops falling

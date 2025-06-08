@@ -133,7 +133,7 @@ public class MinecraftFallingPhysics {
     /**
      * Check if velocity is near terminal velocity (within 90%)
      */
-    private static boolean isNearTerminalVelocity(double velocityY) {
+    public static boolean isNearTerminalVelocity(double velocityY) {
         return Math.abs(velocityY) >= (TERMINAL_VELOCITY * 0.9);
     }
     

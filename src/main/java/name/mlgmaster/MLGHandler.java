@@ -2,7 +2,6 @@ package name.mlgmaster;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
@@ -11,19 +10,53 @@ import name.mlgmaster.MLGTypes.BlockMLG;
 import name.mlgmaster.MLGTypes.WaterMLG;
 
 public class MLGHandler {
-    private static boolean isActive = false;
     private static boolean highFreqTimerRunning = false;
     private static long lastPredictionTime = 0;
     private static final long PREDICTION_INTERVAL = 50;
-    private static final double FALL_TRIGGER_DISTANCE = 4.5;
-    private static final double HIGH_SPEED_THRESHOLD = -3; // 3 blocks per tick
-    
+
     private static final List<MLGType> mlgTypes = new ArrayList<>();
-    
+
+    public static class MLGApplicabilityResult {
+        private final MLGType type;
+        private final String name;
+        private final boolean isApplicable;
+        private final int priority; // Higher number = higher priority
+
+        public MLGApplicabilityResult(MLGType type, String name, boolean isApplicable,
+                int priority) {
+            this.type = type;
+            this.name = name;
+            this.isApplicable = isApplicable;
+            this.priority = priority;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("MLGApplicabilityResult{name='%s', applicable=%s, priority=%d}",
+                    name, isApplicable, priority);
+        }
+
+        public MLGType getType() {
+            return type;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public boolean isApplicable() {
+            return isApplicable;
+        }
+
+        public int getPriority() {
+            return priority;
+        }
+    }
+
     static {
         registerMLGTypes();
     }
-    
+
     private static void registerMLGTypes() {
         mlgTypes.add(new WaterMLG());
         mlgTypes.add(new BlockMLG());
@@ -31,133 +64,113 @@ public class MLGHandler {
 
     public static void onHighFrequencyTick() {
         MinecraftClient client = MinecraftClient.getInstance();
-        
-        if (client == null || client.player == null || client.world == null) {
-            return;
-        }
-
         ClientPlayerEntity player = client.player;
         Vec3d velocity = player.getVelocity();
 
-        // Start high frequency timer when falling fast
-        if (velocity.y <= HIGH_SPEED_THRESHOLD && !highFreqTimerRunning) {
+        List<MLGApplicabilityResult> applicabilityResults =
+                evaluateMLGTypes(client, player, velocity);
+
+        handleHighFrequencyTimer(client, player, velocity, applicabilityResults);
+
+        if (velocity.y >= -0.1 || player.isOnGround()) {
+            handleCleanup(client, player);
+            return;
+        }
+
+        MLGApplicabilityResult chosenMLG = selectBestMLGType(applicabilityResults);
+
+        if (chosenMLG != null) {
+            executeChosenMLG(client, player, chosenMLG);
+        }
+    }
+
+    private static List<MLGApplicabilityResult> evaluateMLGTypes(MinecraftClient client,
+            ClientPlayerEntity player, Vec3d velocity) {
+        List<MLGApplicabilityResult> results = new ArrayList<>();
+
+        for (MLGType mlgType : mlgTypes) {
+            boolean applicable = mlgType.isApplicable(client, player, velocity);
+            int priority = mlgType.getPriority();
+
+            results.add(
+                    new MLGApplicabilityResult(mlgType, mlgType.getName(), applicable, priority));
+        }
+
+        return results;
+    }
+
+    private static void handleHighFrequencyTimer(MinecraftClient client, ClientPlayerEntity player,
+            Vec3d velocity, List<MLGApplicabilityResult> results) {
+
+        boolean shouldRunHighFreq = results.stream().anyMatch(
+                result -> result.isApplicable() && result.getType().requiresHighFrequencyTimer());
+
+        if (shouldRunHighFreq && !highFreqTimerRunning) {
             MLGHighFrequencyTimer.startHighFrequencyUpdates();
             highFreqTimerRunning = true;
-            MLGMaster.LOGGER.info("HIGH FREQUENCY TIMER STARTED: Fall speed {} b/t detected", velocity.y);
+            MLGMaster.LOGGER.info("HIGH FREQUENCY TIMER STARTED: Fall speed {} b/t detected",
+                    velocity.y);
         }
-        
-        // Stop high frequency timer when no longer falling fast
-        if ((velocity.y < HIGH_SPEED_THRESHOLD || player.isOnGround()) && highFreqTimerRunning) {
+
+        if (!shouldRunHighFreq && highFreqTimerRunning) {
             MLGHighFrequencyTimer.stopHighFrequencyUpdates();
             highFreqTimerRunning = false;
-            MLGMaster.LOGGER.info("HIGH FREQUENCY TIMER STOPPED: Fall speed {} b/t, on ground: {}", velocity.y, player.isOnGround());
+            MLGMaster.LOGGER.info("HIGH FREQUENCY TIMER STOPPED: Fall speed {} b/t, on ground: {}",
+                    velocity.y, player.isOnGround());
         }
+    }
 
-        // Only consider falling when moving downward
-        if (velocity.y >= -0.1 || player.isOnGround()) {
-            handleLandingCleanup(client, player);
-            return;
-        }
+    private static MLGApplicabilityResult selectBestMLGType(List<MLGApplicabilityResult> results) {
+        return results.stream().filter(MLGApplicabilityResult::isApplicable)
+                .max((r1, r2) -> Integer.compare(r1.getPriority(), r2.getPriority())).orElse(null);
+    }
 
-        if (player.fallDistance < FALL_TRIGGER_DISTANCE) {
-            return;
-        }
-
+    private static void executeChosenMLG(MinecraftClient client, ClientPlayerEntity player,
+            MLGApplicabilityResult chosenMLG) {
         long currentTime = System.currentTimeMillis();
-        double fallSpeed = Math.abs(velocity.y);
-        long dynamicInterval = fallSpeed > 1.0 ? PREDICTION_INTERVAL / 2 : PREDICTION_INTERVAL;
 
-        if (currentTime - lastPredictionTime < dynamicInterval) {
+        if (currentTime - lastPredictionTime < getDynamicInterval(player.getVelocity().y)) {
             return;
         }
 
         lastPredictionTime = currentTime;
 
-        MLGPredictionResult prediction = PlacementTimingCalculator.analyzeFallAndPlacement(client, player, velocity);
+        MLGType mlgType = chosenMLG.getType();
 
-        if (prediction.shouldPlace()) {
-            executeMLGPlacement(client, player, prediction, currentTime);
+        if (mlgType.canExecute(client, player)) {
+            if (mlgType.execute(client, player)) {
+                mlgType.onSuccessfulPlacement(client, player, currentTime);
+                lastPredictionTime = currentTime + 40;
+
+                MLGMaster.LOGGER.info("MLG SUCCESS: {} executed successfully", chosenMLG.getName());
+            }
+        } else {
+            MLGMaster.LOGGER.warn("MLG BLOCKED: {} cannot execute at this time",
+                    chosenMLG.getName());
         }
     }
-    
-    private static void handleLandingCleanup(MinecraftClient client, ClientPlayerEntity player) {
+
+    private static long getDynamicInterval(double fallSpeed) {
+        double absFallSpeed = Math.abs(fallSpeed);
+        return absFallSpeed > 1.0 ? PREDICTION_INTERVAL / 2 : PREDICTION_INTERVAL;
+    }
+
+    private static void handleCleanup(MinecraftClient client, ClientPlayerEntity player) {
         ScaffoldingCrouchManager.releaseScaffoldingCrouch();
-        
+
         for (MLGType mlgType : mlgTypes) {
             mlgType.handlePostLanding(client, player);
         }
-        
-        if (isActive) {
-            isActive = false;
-        }
-    }
-    
-    private static void executeMLGPlacement(MinecraftClient client, ClientPlayerEntity player, 
-                                         MLGPredictionResult prediction, long currentTime) {
-        MLGType suitableType = findSuitableMLGType(client, player, prediction);
-        
-        if (suitableType != null && suitableType.canExecute(client, player, prediction)) {
-        
-            // Log placement attempt with distance to ground
-            Vec3d playerPos = player.getPos();
-            BlockPos targetBlock = prediction.getHighestLandingBlock();
-            double distanceToGround = playerPos.y - (targetBlock.getY() + 1.0);
-        
-            MLGMaster.LOGGER.info("PLACEMENT ATTEMPT: Type: {}, Distance to ground: {} blocks, Target: {}", 
-                suitableType.getName(), distanceToGround, targetBlock);
-        
-            if (suitableType.execute(client, player, prediction)) {
-                isActive = true;
-                suitableType.onSuccessfulPlacement(client, player, prediction, currentTime);
-                lastPredictionTime = currentTime + 40;
-            
-                MLGMaster.LOGGER.info("PLACEMENT SUCCESS: {} placed successfully at distance {} blocks from ground", 
-                    suitableType.getName(), distanceToGround);
-            } else {
-                MLGMaster.LOGGER.warn("PLACEMENT FAILED: {} failed to place at distance {:.1f} blocks from ground", 
-                    suitableType.getName(), distanceToGround);
-            }
-        } else {
-            MLGMaster.LOGGER.warn("PLACEMENT BLOCKED: No suitable MLG type available or cannot execute");
-        }
-    }
-    
-    private static MLGType findSuitableMLGType(MinecraftClient client, ClientPlayerEntity player, 
-                                             MLGPredictionResult prediction) {
-        for (MLGType mlgType : mlgTypes) {
-            if (mlgType.isApplicable(client, player, prediction)) {
-                return mlgType;
-            }
-        }
-        return null;
     }
 
-    public static boolean isActive() {
-        return isActive;
-    }
-
-    public static void setActive(boolean active) {
-        isActive = active;
-        if (!active) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client != null && client.player != null) {
-                for (MLGType mlgType : mlgTypes) {
-                    mlgType.reset();
-                }
-            }
-        }
-    }
-    
     public static List<MLGType> getRegisteredTypes() {
         return new ArrayList<>(mlgTypes);
     }
-    
-    // Add getter for timer status
+
     public static boolean isHighFrequencyTimerRunning() {
         return highFreqTimerRunning;
     }
-    
-    // Add method to force stop timer (useful for cleanup)
+
     public static void forceStopHighFrequencyTimer() {
         if (highFreqTimerRunning) {
             MLGHighFrequencyTimer.stopHighFrequencyUpdates();

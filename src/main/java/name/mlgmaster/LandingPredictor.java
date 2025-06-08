@@ -179,11 +179,7 @@ public class LandingPredictor {
             Box nextHitbox, Vec3d velocity) {
         List<BlockPos> collidingBlocks = new ArrayList<>();
 
-        // Create movement box that encompasses the entire movement path
         Box movementBox = currentHitbox.union(nextHitbox);
-
-        // Expand slightly to account for floating point precision
-        movementBox = movementBox.expand(0.1);
 
         int minX = (int) Math.floor(movementBox.minX);
         int minY = (int) Math.floor(movementBox.minY);
@@ -220,15 +216,12 @@ public class LandingPredictor {
 
     private static boolean doesMovementIntersectBlock(Box currentHitbox, Box nextHitbox,
             Box blockBox, Vec3d velocity) {
-        // Check if either current or next position intersects
         if (currentHitbox.intersects(blockBox) || nextHitbox.intersects(blockBox)) {
             return true;
         }
 
-        // Check intermediate positions for fast movement
         double velocityMagnitude = velocity.length();
         if (velocityMagnitude > 1.0) {
-            // Sample intermediate positions for fast movement
             int samples = Math.min(10, (int) Math.ceil(velocityMagnitude * 2));
             for (int i = 1; i < samples; i++) {
                 double t = (double) i / samples;
@@ -265,7 +258,6 @@ public class LandingPredictor {
             return null;
         }
 
-        // Find the highest block that's most likely to be the primary landing surface
         BlockPos best = collidingBlocks.get(0);
         int highestY = best.getY();
 

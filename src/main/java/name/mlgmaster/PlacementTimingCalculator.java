@@ -14,7 +14,6 @@ public class PlacementTimingCalculator {
             ClientPlayerEntity player, Vec3d velocity) {
         Vec3d playerPos = player.getPos();
 
-        // Basic fall validation
         if (velocity.y >= -0.1) {
             return createFailResult("Not falling", 0);
         }
@@ -94,7 +93,7 @@ public class PlacementTimingCalculator {
                                                                  BlockPos targetBlock) {
         
         double currentHeight = player.getPos().y;
-        double groundHeight = targetBlock.getY() + 1.0; // Account for player height
+        double groundHeight = targetBlock.getY() + 1.0;
         double currentVelocity = velocity.y;
         
         MLGMaster.LOGGER.info("PHYSICS CALCULATION: Current height: {}, Ground height: {}, Current velocity: {}", 

@@ -13,14 +13,15 @@ public class MLGMaster implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-			ScaffoldingCrouchManager.forceReleaseCrouch();
-		});
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			if (client != null && client.player != null && client.world != null) {
 				MLGHandler.onHighFrequencyTick();
 			}
+		});
+		
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			ScaffoldingCrouchManager.forceReleaseCrouch();
 		});
 
 		LOGGER.info("WaterMLG mod initialized successfully!");

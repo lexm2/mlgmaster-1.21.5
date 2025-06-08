@@ -5,6 +5,8 @@ import name.mlgmaster.InventoryManager;
 import name.mlgmaster.MLGBlockPlacer;
 import name.mlgmaster.MLGPredictionResult;
 import name.mlgmaster.MLGType;
+import name.mlgmaster.MinecraftFallingPhysics;
+import name.mlgmaster.PlacementTimingCalculator;
 import name.mlgmaster.PlayerRotationManager;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
@@ -23,28 +25,86 @@ public class WaterMLG extends MLGType {
     private static final long WATER_PICKUP_DELAY = 100;
     private boolean pickupAttempted = false;
 
+    private Vec3d lastVelocity = new Vec3d(0, 0, 0);
+
+    private static final double FALL_TRIGGER_DISTANCE = 4.5;
+
     @Override
-    public boolean isApplicable(MinecraftClient client, ClientPlayerEntity player, MLGPredictionResult prediction) {
-        return prediction.getTargetItem() == Items.WATER_BUCKET;
+    public boolean isApplicable(MinecraftClient client, ClientPlayerEntity player, Vec3d velocity) {
+        if (!InventoryManager.hasItem(player, Items.WATER_BUCKET)) {
+            return false;
+        }
+
+        if (velocity.y >= -0.1 || player.isOnGround()) {
+            return false;
+        }
+
+        if (player.fallDistance < FALL_TRIGGER_DISTANCE) {
+            return false;
+        }
+
+        lastVelocity = velocity;
+         
+        return true;
     }
 
     @Override
-    public boolean canExecute(MinecraftClient client, ClientPlayerEntity player, MLGPredictionResult prediction) {
+    public boolean requiresHighFrequencyTimer() {
+        return MinecraftFallingPhysics.isNearTerminalVelocity(lastVelocity.y);
+    }
+
+    @Override
+    public boolean canExecute(MinecraftClient client, ClientPlayerEntity player,
+            MLGPredictionResult prediction) {
         return InventoryManager.hasItem(player, Items.WATER_BUCKET);
     }
 
     @Override
-    public boolean execute(MinecraftClient client, ClientPlayerEntity player, MLGPredictionResult prediction) {
+    public boolean canExecute(MinecraftClient client, ClientPlayerEntity player) {
+        return InventoryManager.hasItem(player, Items.WATER_BUCKET);
+    }
+
+    @Override
+    public boolean execute(MinecraftClient client, ClientPlayerEntity player,
+            MLGPredictionResult prediction) {
         return BlockPlacer.executeBlockPlacement(client, player, prediction);
     }
 
     @Override
-    public void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player, 
-                                    MLGPredictionResult prediction, long currentTime) {
+    public boolean execute(MinecraftClient client, ClientPlayerEntity player) {
+        Vec3d velocity = player.getVelocity();
+        MLGPredictionResult prediction =
+                PlacementTimingCalculator.analyzeFallAndPlacement(client, player, velocity);
+
+        if (prediction.shouldPlace()) {
+            return BlockPlacer.executeBlockPlacement(client, player, prediction);
+        }
+
+        return false;
+    }
+
+    @Override
+    public void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player,
+            MLGPredictionResult prediction, long currentTime) {
         waterPlaced = true;
         placedWaterPos = prediction.getHighestLandingBlock().up();
         waterPlacementTime = currentTime;
         pickupAttempted = false;
+    }
+
+    @Override
+    public void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player,
+            long timestamp) {
+        waterPlaced = true;
+        waterPlacementTime = timestamp;
+        pickupAttempted = false;
+
+        // Try to determine water position from player's position (fallback)
+        if (placedWaterPos == null) {
+            Vec3d playerPos = player.getPos();
+            placedWaterPos =
+                    new BlockPos((int) playerPos.x, (int) playerPos.y - 1, (int) playerPos.z);
+        }
     }
 
     @Override
@@ -60,7 +120,7 @@ public class WaterMLG extends MLGType {
         }
 
         long currentTime = System.currentTimeMillis();
-        
+
         if (currentTime - waterPlacementTime < WATER_PICKUP_DELAY) {
             return;
         }
@@ -79,26 +139,29 @@ public class WaterMLG extends MLGType {
         reset();
     }
 
-    private boolean pickupWater(MinecraftClient client, ClientPlayerEntity player, BlockPos waterPos) {
+    private boolean pickupWater(MinecraftClient client, ClientPlayerEntity player,
+            BlockPos waterPos) {
         try {
             PlayerRotationManager.storeOriginalRotation(player);
-            
+
             Vec3d waterCenter = Vec3d.ofCenter(waterPos);
             PlayerRotationManager.lookAtTarget(player, waterCenter);
-            
+
             Thread.sleep(50);
-            
-            Vec3d hitPos = new Vec3d(waterPos.getX() + 0.5, waterPos.getY() + 0.5, waterPos.getZ() + 0.5);
+
+            Vec3d hitPos =
+                    new Vec3d(waterPos.getX() + 0.5, waterPos.getY() + 0.5, waterPos.getZ() + 0.5);
             BlockHitResult hitResult = new BlockHitResult(hitPos, Direction.UP, waterPos, false);
-            
-            boolean success = MLGBlockPlacer.interactBlock(client, player, Hand.MAIN_HAND, waterPos, hitPos, Direction.UP);
-            
+
+            boolean success = MLGBlockPlacer.interactBlock(client, player, Hand.MAIN_HAND, waterPos,
+                    hitPos, Direction.UP);
+
             if (!success) {
                 success = MLGBlockPlacer.placeItem(client, player, Hand.MAIN_HAND);
             }
-            
+
             return success;
-            
+
         } catch (Exception e) {
             return false;
         } finally {
@@ -127,7 +190,7 @@ public class WaterMLG extends MLGType {
     public boolean isWaterPlaced() {
         return waterPlaced;
     }
-    
+
     public BlockPos getPlacedWaterPos() {
         return placedWaterPos;
     }

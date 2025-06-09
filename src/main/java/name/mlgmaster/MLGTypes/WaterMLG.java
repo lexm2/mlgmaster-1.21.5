@@ -20,8 +20,6 @@ import net.minecraft.util.math.Vec3d;
 public class WaterMLG extends MLGType {
     private boolean waterPlaced = false;
     private BlockPos placedWaterPos = null;
-    private long waterPlacementTime = 0;
-    private static final long WATER_PICKUP_DELAY = 100;
     private boolean pickupAttempted = false;
 
     private Vec3d lastVelocity = new Vec3d(0, 0, 0);
@@ -75,7 +73,6 @@ public class WaterMLG extends MLGType {
     @Override
     public void onSuccessfulPlacement(MinecraftClient client, ClientPlayerEntity player, long currentTime) {
         waterPlaced = true;
-        waterPlacementTime = currentTime;
         pickupAttempted = false;
     }
 
@@ -87,12 +84,6 @@ public class WaterMLG extends MLGType {
     }
 
     private void handleWaterPickup(MinecraftClient client, ClientPlayerEntity player) {
-        long currentTime = System.currentTimeMillis();
-
-        if (currentTime - waterPlacementTime < WATER_PICKUP_DELAY) {
-            return;
-        }
-
         if (client.world.getBlockState(placedWaterPos).getBlock() != Blocks.WATER) {
             MLGMaster.LOGGER.info(
                     client.world.getBlockState(placedWaterPos).getBlock().getTranslationKey());
@@ -138,7 +129,6 @@ public class WaterMLG extends MLGType {
     public void reset() {
         waterPlaced = false;
         placedWaterPos = null;
-        waterPlacementTime = 0;
         pickupAttempted = true;
     }
 

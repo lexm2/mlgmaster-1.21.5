@@ -11,8 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Comprehensive Minecraft physics engine for accurate fall prediction Handles both theoretical
- * calculations and real-world simulation
+ * Comprehensive Minecraft physics engine for accurate fall prediction
  */
 public class MinecraftPhysics {
 
@@ -21,12 +20,10 @@ public class MinecraftPhysics {
     private static final double AIR_DRAG = 0.98; // velocity multiplier each tick
     private static final double HORIZONTAL_DRAG = 0.91; // horizontal drag when on ground/moving
     private static final double TERMINAL_VELOCITY = 3.92; // theoretical maximum (blocks/tick)
-    private static final double MIN_VELOCITY_THRESHOLD = 0.001; // negligible movement threshold
     private static final int MAX_SIMULATION_TICKS = 1000; // safety limit for simulation
 
     /**
-     * Calculate theoretical velocity at a given tick (pure physics) v(t) = (0.98^floor(t) - 1) ×
-     * 3.92
+     * Calculate theoretical velocity at a given tick (pure physics)
      */
     public static double calculateVelocityAtTick(double tickTime) {
         int flooredTick = (int) Math.floor(tickTime);
@@ -34,8 +31,7 @@ public class MinecraftPhysics {
     }
 
     /**
-     * Calculate theoretical distance fallen by a given tick (pure physics) d(t) = 196 - 3.92 × t -
-     * 194.04 × 0.98^(t-0.5)
+     * Calculate theoretical distance fallen by a given tick (pure physics)
      */
     public static double calculateDistanceFallenAtTick(double tickTime) {
         return 196 - (TERMINAL_VELOCITY * tickTime) - (194.04 * Math.pow(AIR_DRAG, tickTime - 0.5));
@@ -67,8 +63,7 @@ public class MinecraftPhysics {
     }
 
     /**
-     * Simulate realistic player movement with collision detection This accounts for horizontal
-     * movement, air resistance, and block collisions
+     * Simulate realistic player movement with improved collision detection
      */
     public static MovementSimulationResult simulatePlayerMovement(MinecraftClient client,
             ClientPlayerEntity player, Vec3d startPosition, Vec3d initialVelocity) {
@@ -91,15 +86,13 @@ public class MinecraftPhysics {
             // Record this tick's movement
             movementHistory.add(new MovementTick(tick, currentPos, currentVelocity, nextPos));
 
-            // Check for collisions
-            List<BlockPos> tickCollisions =
-                    checkCollisions(client, playerHitbox, nextHitbox, currentVelocity);
+            // Check for collisions using improved detection
+            BlockPos collisionBlock = findFirstCollision(client, currentPos, nextPos, playerHitbox);
 
-            if (!tickCollisions.isEmpty()) {
+            if (collisionBlock != null) {
                 // Collision detected - calculate final results
-                collidingBlocks.addAll(tickCollisions);
-                Vec3d horizontalDisplacement =
-                        calculateHorizontalDisplacement(nextPos, startHorizontal);
+                collidingBlocks.add(collisionBlock);
+                Vec3d horizontalDisplacement = calculateHorizontalDisplacement(nextPos, startHorizontal);
 
                 return new MovementSimulationResult(true, nextPos, collidingBlocks, nextHitbox,
                         tick, horizontalDisplacement, movementHistory, currentVelocity);
@@ -108,11 +101,6 @@ public class MinecraftPhysics {
             // Update position and hitbox for next iteration
             currentPos = nextPos;
             playerHitbox = nextHitbox;
-
-            // Check if movement is negligible
-            if (isMovementNegligible(currentVelocity)) {
-                break;
-            }
 
             // Safety check for extreme falls
             if (currentPos.y < startPosition.y - 200) {
@@ -127,6 +115,105 @@ public class MinecraftPhysics {
     }
 
     /**
+     * Improved collision detection that finds the first (topmost) block hit
+     */
+    private static BlockPos findFirstCollision(MinecraftClient client, Vec3d currentPos,
+            Vec3d nextPos, Box playerHitbox) {
+
+        // Calculate movement bounds with more precise collision detection
+        double minX = Math.min(currentPos.x, nextPos.x) - 0.3; // Player half-width
+        double maxX = Math.max(currentPos.x, nextPos.x) + 0.3;
+        double minZ = Math.min(currentPos.z, nextPos.z) - 0.3;
+        double maxZ = Math.max(currentPos.z, nextPos.z) + 0.3;
+        double minY = Math.min(currentPos.y, nextPos.y) - 1.8; // Player height
+        double maxY = Math.max(currentPos.y, nextPos.y);
+
+        // Convert to block coordinates
+        int blockMinX = (int) Math.floor(minX);
+        int blockMaxX = (int) Math.ceil(maxX);
+        int blockMinZ = (int) Math.floor(minZ);
+        int blockMaxZ = (int) Math.ceil(maxZ);
+        int blockMinY = (int) Math.floor(minY);
+        int blockMaxY = (int) Math.ceil(maxY);
+
+        BlockPos firstCollision = null;
+
+        // For falling players, we need to find the highest block that actually stops
+        // their fall
+        // Check from bottom up to find the first solid surface they'll land on
+        for (int y = blockMinY; y <= blockMaxY; y++) {
+            for (int x = blockMinX; x <= blockMaxX; x++) {
+                for (int z = blockMinZ; z <= blockMaxZ; z++) {
+                    BlockPos blockPos = new BlockPos(x, y, z);
+
+                    if (isBlockSolid(client, blockPos)) {
+                        if (wouldPlayerLandOnBlock(currentPos, nextPos, blockPos)) {
+                            // This is a valid landing - check if it's the first one we'll hit
+                            if (firstCollision == null || blockPos.getY() > firstCollision.getY()) {
+                                firstCollision = blockPos;
+
+                                MLGMaster.LOGGER.debug(
+                                        "COLLISION CANDIDATE: Block {} at Y={}, player falling from Y={} to Y={}",
+                                        blockPos, blockPos.getY(), currentPos.y, nextPos.y);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return firstCollision;
+    }
+
+    /**
+     * More accurate collision check - specifically for landing scenarios
+     */
+    private static boolean wouldPlayerLandOnBlock(Vec3d currentPos, Vec3d nextPos, BlockPos blockPos) {
+        // Player dimensions
+        double playerWidth = 0.6;
+        double playerHeight = 1.8;
+
+        // Block bounds
+        double blockTop = blockPos.getY() + 1.0;
+        double blockBottom = blockPos.getY();
+
+        // Only consider this a landing collision if:
+        // 1. Player is falling (nextPos.y < currentPos.y)
+        // 2. Player will pass through or land on the top surface of the block
+        // 3. Player's horizontal position overlaps with the block
+
+        if (nextPos.y >= currentPos.y) {
+            return false; // Not falling
+        }
+
+        // Check if player's feet will be at or below block top but above block bottom
+        double playerFeetY = nextPos.y - playerHeight;
+        if (playerFeetY > blockTop || nextPos.y < blockBottom) {
+            return false; // Player passes above or below this block
+        }
+
+        // Check horizontal overlap
+        double playerMinX = nextPos.x - playerWidth / 2;
+        double playerMaxX = nextPos.x + playerWidth / 2;
+        double playerMinZ = nextPos.z - playerWidth / 2;
+        double playerMaxZ = nextPos.z + playerWidth / 2;
+
+        double blockMinX = blockPos.getX();
+        double blockMaxX = blockPos.getX() + 1.0;
+        double blockMinZ = blockPos.getZ();
+        double blockMaxZ = blockPos.getZ() + 1.0;
+
+        boolean xOverlap = playerMaxX > blockMinX && playerMinX < blockMaxX;
+        boolean zOverlap = playerMaxZ > blockMinZ && playerMinZ < blockMaxZ;
+
+        // Additional check: ensure player is actually moving toward this block's top
+        // surface
+        boolean movingTowardBlock = currentPos.y > blockTop && nextPos.y <= blockTop + playerHeight;
+
+        return xOverlap && zOverlap && movingTowardBlock;
+    }
+    
+    /**
      * Apply one tick of Minecraft physics to velocity
      */
     private static Vec3d applyPhysicsTick(Vec3d velocity) {
@@ -138,87 +225,15 @@ public class MinecraftPhysics {
                 velocity.z * HORIZONTAL_DRAG);
     }
 
-    /**
-     * Check for block collisions during movement
-     */
-    private static List<BlockPos> checkCollisions(MinecraftClient client, Box currentHitbox,
-            Box nextHitbox, Vec3d velocity) {
-        List<BlockPos> collidingBlocks = new ArrayList<>();
-        Box movementBox = currentHitbox.union(nextHitbox);
-
-        int minX = (int) Math.floor(movementBox.minX);
-        int minY = (int) Math.floor(movementBox.minY);
-        int minZ = (int) Math.floor(movementBox.minZ);
-        int maxX = (int) Math.ceil(movementBox.maxX);
-        int maxY = (int) Math.ceil(movementBox.maxY);
-        int maxZ = (int) Math.ceil(movementBox.maxZ);
-
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    BlockPos blockPos = new BlockPos(x, y, z);
-
-                    if (isBlockSolid(client, blockPos)) {
-                        VoxelShape blockShape = getBlockCollisionShape(client, blockPos);
-                        if (!blockShape.isEmpty()) {
-                            Box blockBox = blockShape.getBoundingBox().offset(blockPos);
-
-                            if (doesMovementIntersectBlock(currentHitbox, nextHitbox, blockBox,
-                                    velocity)) {
-                                collidingBlocks.add(blockPos);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return collidingBlocks;
-    }
-
-    /**
-     * Check if movement path intersects with a block
-     */
-    private static boolean doesMovementIntersectBlock(Box currentHitbox, Box nextHitbox,
-            Box blockBox, Vec3d velocity) {
-        if (currentHitbox.intersects(blockBox) || nextHitbox.intersects(blockBox)) {
-            return true;
-        }
-
-        // Sample intermediate positions for fast movement
-        double velocityMagnitude = velocity.length();
-        if (velocityMagnitude > 1.0) {
-            int samples = Math.min(10, (int) Math.ceil(velocityMagnitude * 2));
-            for (int i = 1; i < samples; i++) {
-                double t = (double) i / samples;
-                Vec3d intermediateOffset = velocity.multiply(t);
-                Box intermediateHitbox = currentHitbox.offset(intermediateOffset);
-
-                if (intermediateHitbox.intersects(blockBox)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     // Helper methods
     private static boolean isBlockSolid(MinecraftClient client, BlockPos blockPos) {
-        BlockState blockState = client.world.getBlockState(blockPos);
-        return !blockState.isAir()
-                && !blockState.getCollisionShape(client.world, blockPos).isEmpty();
-    }
-
-    private static VoxelShape getBlockCollisionShape(MinecraftClient client, BlockPos blockPos) {
-        BlockState blockState = client.world.getBlockState(blockPos);
-        return blockState.getCollisionShape(client.world, blockPos);
-    }
-
-    private static boolean isMovementNegligible(Vec3d velocity) {
-        return Math.abs(velocity.x) < MIN_VELOCITY_THRESHOLD
-                && Math.abs(velocity.y) < MIN_VELOCITY_THRESHOLD
-                && Math.abs(velocity.z) < MIN_VELOCITY_THRESHOLD;
+        try {
+            BlockState blockState = client.world.getBlockState(blockPos);
+            return !blockState.isAir()
+                    && !blockState.getCollisionShape(client.world, blockPos).isEmpty();
+        } catch (Exception e) {
+            return false; // Assume non-solid if we can't check
+        }
     }
 
     private static Vec3d calculateHorizontalDisplacement(Vec3d currentPos, Vec3d startHorizontal) {
@@ -262,7 +277,7 @@ public class MinecraftPhysics {
         return Math.abs(velocityY) >= (TERMINAL_VELOCITY * 0.9);
     }
 
-    // Data classes
+    // Data classes remain the same...
     public static class MovementSimulationResult {
         private final boolean hasCollision;
         private final Vec3d finalPosition;
@@ -357,7 +372,6 @@ public class MinecraftPhysics {
         private final double rawVelocityY;
         private final double fallSpeedBlocksPerTick;
         private final double fallSpeedBlocksPerSecond;
-        private final double fallSpeedMetersPerSecond;
         private final double totalFallDistance;
         private final double estimatedFallTick;
         private final double theoreticalVelocity;
@@ -371,7 +385,6 @@ public class MinecraftPhysics {
             this.rawVelocityY = rawVelocityY;
             this.fallSpeedBlocksPerTick = fallSpeedBlocksPerTick;
             this.fallSpeedBlocksPerSecond = fallSpeedBlocksPerSecond;
-            this.fallSpeedMetersPerSecond = fallSpeedMetersPerSecond;
             this.totalFallDistance = totalFallDistance;
             this.estimatedFallTick = estimatedFallTick;
             this.theoreticalVelocity = theoreticalVelocity;
@@ -390,10 +403,6 @@ public class MinecraftPhysics {
 
         public double getFallSpeedBlocksPerSecond() {
             return fallSpeedBlocksPerSecond;
-        }
-
-        public double getFallSpeedMetersPerSecond() {
-            return fallSpeedMetersPerSecond;
         }
 
         public double getTotalFallDistance() {
@@ -424,4 +433,3 @@ public class MinecraftPhysics {
         }
     }
 }
-

@@ -14,6 +14,7 @@ public class MLGMaster implements ModInitializer {
 	@Override
 	public void onInitialize() {
 
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			if (client != null && client.player != null && client.world != null) {
 				MLGHandler.onHighFrequencyTick();

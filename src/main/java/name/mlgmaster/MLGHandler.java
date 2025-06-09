@@ -3,6 +3,7 @@ package name.mlgmaster;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +16,12 @@ public class MLGHandler {
     private static final long PREDICTION_INTERVAL = 50;
 
     private static final List<MLGType> mlgTypes = new ArrayList<>();
+
+    // Landing prediction rendering
+    private static BlockPos predictedLandingBlock = null;
+    private static BlockPos previousPredictedLandingBlock = null; // Track previous prediction
+    private static Vec3d predictedLandingPosition = null;
+    private static Vec3d previousPredictedLandingPosition = null;
 
     public static class MLGApplicabilityResult {
         private final MLGType type;
@@ -66,27 +73,95 @@ public class MLGHandler {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         Vec3d velocity = player.getVelocity();
+
+        if (velocity.y >= -0.1 || player.isOnGround()) {
+            handleCleanup(client, player);
+            return;
+        }
+
+        updateLandingPrediction(client, player, velocity);
+
         MLGPredictionResult prediction =
                 FallPredictionSystem.analyzeFallAndPlacement(client, player, velocity);
-
 
         List<MLGApplicabilityResult> applicabilityResults =
                 evaluateMLGTypes(client, player, velocity, prediction);
 
         handleHighFrequencyTimer(client, player, velocity, applicabilityResults);
 
-        if (velocity.y >= -0.1 || player.isOnGround()) {
-            handleCleanup(client, player, prediction);
-            return;
-        }
+        
 
         MLGApplicabilityResult chosenMLG = selectBestMLGType(applicabilityResults);
-
 
         if (chosenMLG != null) {
             executeChosenMLG(client, player, chosenMLG, prediction);
         }
     }
+
+    private static void updateLandingPrediction(MinecraftClient client, ClientPlayerEntity player,
+            Vec3d velocity) {
+        try {
+            HitboxLandingResult landingResult = FallPredictionSystem.predictLanding(client, player);
+
+            if (landingResult != null) {
+                // Update current predictions
+                predictedLandingBlock = landingResult.getPrimaryLandingBlock();
+                predictedLandingPosition = landingResult.getLandingPosition();
+
+                // Check if landing block prediction changed
+                if (hasLandingBlockChanged()) {
+                    logLandingBlockChange();
+                }
+            } else {
+                if (predictedLandingBlock != null) {
+                    MLGMaster.LOGGER.warn(
+                            "LANDING PREDICTION LOST: Previous block was {}, now no landing predicted",
+                            predictedLandingBlock);
+                }
+
+                previousPredictedLandingBlock = predictedLandingBlock;
+                previousPredictedLandingPosition = predictedLandingPosition;
+            }
+        } catch (Exception e) {
+            MLGMaster.LOGGER.warn("Error updating landing prediction: {}", e.getMessage());
+            previousPredictedLandingBlock = predictedLandingBlock;
+            previousPredictedLandingPosition = predictedLandingPosition;
+            predictedLandingBlock = null;
+            predictedLandingPosition = null;
+        }
+    }
+
+    private static boolean hasLandingBlockChanged() {
+        if (previousPredictedLandingBlock == null || predictedLandingBlock == null) {
+            return false;
+        }
+
+        return !previousPredictedLandingBlock.equals(predictedLandingBlock);
+    }
+
+    private static void logLandingBlockChange() {
+        MinecraftClient client = MinecraftClient.getInstance();
+
+        String previousBlockType = "null";
+        String currentBlockType = "null";
+
+        if (previousPredictedLandingBlock != null && client.world != null) {
+            previousBlockType = client.world.getBlockState(previousPredictedLandingBlock).getBlock()
+                    .getName().getString();
+        }
+
+        if (predictedLandingBlock != null && client.world != null) {
+            currentBlockType = client.world.getBlockState(predictedLandingBlock).getBlock()
+                    .getName().getString();
+        }
+
+        MLGMaster.LOGGER.info("LANDING PREDICTION CHANGED: {} -> {}", previousBlockType,
+                currentBlockType);
+        MLGMaster.LOGGER.info("PREDICTED LANDING POSITIONS: {} -> {}", predictedLandingPosition,
+                previousPredictedLandingPosition);
+    }
+
+
 
     private static List<MLGApplicabilityResult> evaluateMLGTypes(MinecraftClient client,
             ClientPlayerEntity player, Vec3d velocity, MLGPredictionResult prediction) {
@@ -159,9 +234,13 @@ public class MLGHandler {
         return absFallSpeed > 1.0 ? PREDICTION_INTERVAL / 2 : PREDICTION_INTERVAL;
     }
 
-    private static void handleCleanup(MinecraftClient client, ClientPlayerEntity player,
-            MLGPredictionResult prediction) {
+    public static void handleCleanup(MinecraftClient client, ClientPlayerEntity player) {
         ScaffoldingCrouchManager.releaseScaffoldingCrouch();
+
+        // Clear landing prediction when landing/cleanup
+        previousPredictedLandingBlock = predictedLandingBlock;
+        predictedLandingBlock = null;
+        predictedLandingPosition = null;
 
         for (MLGType mlgType : mlgTypes) {
             mlgType.handlePostLanding(client, player);
@@ -182,5 +261,18 @@ public class MLGHandler {
             highFreqTimerRunning = false;
             MLGMaster.LOGGER.info("HIGH FREQUENCY TIMER FORCE STOPPED");
         }
+    }
+
+    // Public getters for rendering system
+    public static BlockPos getPredictedLandingBlock() {
+        return predictedLandingBlock;
+    }
+
+    public static Vec3d getPredictedLandingPosition() {
+        return predictedLandingPosition;
+    }
+
+    public static BlockPos getPreviousPredictedLandingBlock() {
+        return previousPredictedLandingBlock;
     }
 }

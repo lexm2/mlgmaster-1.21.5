@@ -1,26 +1,25 @@
 package name.mlgmaster;
 
+import name.mlgmaster.SafeLandingBlockChecker.SafetyResult;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-import java.util.List;
 
 /**
- * Comprehensive fall prediction and MLG timing system Uses MinecraftPhysics for accurate
- * calculations
+ * Comprehensive fall prediction and MLG timing system with improved validation
  */
 public class FallPredictionSystem {
 
     // MLG Configuration
-    private static final int PLACEMENT_BUFFER_TICKS = 3; // Place 3 ticks before impact
+    private static final int PLACEMENT_BUFFER_TICKS = 1;
     private static final int MAX_PLACEMENT_DISTANCE_BLOCKS = 5;
     private static final double MIN_DANGEROUS_FALL_DISTANCE = 3.0;
     private static final double MIN_FALL_VELOCITY = 0.1;
 
     /**
-     * Complete MLG analysis - determines if and when to place water bucket
+     * Complete MLG analysis with improved validation
      */
     public static MLGPredictionResult analyzeFallAndPlacement(MinecraftClient client,
             ClientPlayerEntity player, Vec3d velocity) {
@@ -32,23 +31,39 @@ public class FallPredictionSystem {
             return createFailResult(validation.getReason(), 0);
         }
 
-        // Simulate player movement using accurate physics
-        MinecraftPhysics.MovementSimulationResult simulation =
-                MinecraftPhysics.simulatePlayerMovement(client, player, playerPos, velocity);
+        // Simulate player movement using improved physics
+        MinecraftPhysics.MovementSimulationResult simulation = MinecraftPhysics.simulatePlayerMovement(client, player,
+                playerPos, velocity);
 
         if (!simulation.hasCollision()) {
             return createFailResult("No landing predicted", 0);
         }
 
-        // Create proper HitboxLandingResult
-        HitboxLandingResult landingResult =
-                HitboxLandingResult.fromPhysicsSimulation(simulation, client, player, playerPos);
+        // Validate collision results
+        CollisionValidation collisionValidation = validateCollisionResults(simulation, playerPos);
+        if (!collisionValidation.isValid()) {
+            MLGMaster.LOGGER.warn("COLLISION VALIDATION FAILED: {}", collisionValidation.getReason());
+            return createFailResult(collisionValidation.getReason(), 0);
+        }
 
-        // Find optimal landing block
+        // Create proper HitboxLandingResult with validation
+        HitboxLandingResult landingResult = HitboxLandingResult.fromPhysicsSimulation(simulation, client, player,
+                playerPos);
+
+        // Find optimal landing block with additional validation
         BlockPos landingBlock = landingResult.getPrimaryLandingBlock();
         if (landingBlock == null) {
             return createFailResult("No suitable landing block", 0);
         }
+
+        // Validate landing block position
+        if (!validateLandingBlock(landingBlock, playerPos, simulation.getFinalPosition())) {
+            MLGMaster.LOGGER.warn("INVALID LANDING BLOCK: Block {} is invalid for player at {} falling to {}",
+                    landingBlock, playerPos, simulation.getFinalPosition());
+            return createFailResult("Invalid landing block position", 0);
+        }
+
+        MLGHandler.handleCleanup(client, player);
 
         // Get safety result from landing result
         SafeLandingBlockChecker.SafetyResult safetyResult = landingResult.getSafetyResult();
@@ -60,19 +75,17 @@ public class FallPredictionSystem {
         }
 
         // Calculate precise placement timing
-        PlacementAnalysis timing =
-                calculatePlacementTiming(player, velocity, simulation, landingBlock);
+        PlacementAnalysis timing = calculatePlacementTiming(player, velocity, simulation, landingBlock);
 
         // Determine water placement position
         Vec3d waterPlacementTarget = landingResult.getLookTarget();
-        double distanceToTarget =
-                waterPlacementTarget != null ? playerPos.distanceTo(waterPlacementTarget)
-                        : Double.MAX_VALUE;
+        double distanceToTarget = waterPlacementTarget != null ? playerPos.distanceTo(waterPlacementTarget)
+                : Double.MAX_VALUE;
 
         // Validate placement distance
         if (distanceToTarget > MAX_PLACEMENT_DISTANCE_BLOCKS) {
             MLGMaster.LOGGER.info(
-                    "TIMING: Target too far - Distance: {:.1f} blocks, Max: {} blocks",
+                    "TIMING: Target too far - Distance: {} blocks, Max: {} blocks",
                     distanceToTarget, MAX_PLACEMENT_DISTANCE_BLOCKS);
             return createFailResult(
                     "Target too far: " + String.format("%.1f", distanceToTarget) + " blocks",
@@ -80,7 +93,7 @@ public class FallPredictionSystem {
         }
 
         // Log comprehensive timing analysis
-        logTimingAnalysis(timing, playerPos, landingBlock, velocity);
+        logTimingAnalysis(timing, playerPos, landingBlock, velocity, simulation);
 
         // Make final placement decision
         boolean shouldPlace = timing.shouldPlaceNow();
@@ -89,6 +102,81 @@ public class FallPredictionSystem {
         return new MLGPredictionResult(shouldPlace, true, landingResult, landingBlock,
                 waterPlacementTarget, distanceToTarget, reason, safetyResult,
                 MAX_PLACEMENT_DISTANCE_BLOCKS, Items.WATER_BUCKET);
+    }
+
+    /**
+     * Validate collision results to ensure they make physical sense
+     */
+    private static CollisionValidation validateCollisionResults(
+            MinecraftPhysics.MovementSimulationResult simulation, Vec3d playerPos) {
+
+        if (simulation.getCollidingBlocks().isEmpty()) {
+            return new CollisionValidation(false, "No colliding blocks found");
+        }
+
+        BlockPos collisionBlock = simulation.getCollidingBlocks().get(0);
+        Vec3d finalPos = simulation.getFinalPosition();
+
+        // Check if collision block is significantly above the player's final position
+        // Allow some tolerance for player height (1.8 blocks)
+        if (collisionBlock.getY() > finalPos.y + 2.0) { // Increased tolerance
+            return new CollisionValidation(false,
+                    String.format("Collision block Y=%d is too far above player final Y=%.2f",
+                            collisionBlock.getY(), finalPos.y));
+        }
+
+        // Check if collision block is too far below starting position
+        double fallDistance = playerPos.y - (collisionBlock.getY() + 1.0);
+        if (fallDistance < -1.0) { // Allow small tolerance for edge cases
+            return new CollisionValidation(false,
+                    String.format("Collision block Y=%d is above starting position Y=%.2f",
+                            collisionBlock.getY(), playerPos.y));
+        }
+
+        // Check horizontal distance (player shouldn't teleport horizontally)
+        double horizontalDistance = Math.sqrt(
+                Math.pow(finalPos.x - playerPos.x, 2) +
+                        Math.pow(finalPos.z - playerPos.z, 2));
+
+        if (horizontalDistance > 10.0) { // Reasonable limit for horizontal drift
+            return new CollisionValidation(false,
+                    String.format("Excessive horizontal movement: %.2f blocks", horizontalDistance));
+        }
+
+        return new CollisionValidation(true, "Valid collision");
+    }
+
+    /**
+     * Validate that the landing block makes sense given player position and
+     * trajectory
+     */
+    private static boolean validateLandingBlock(BlockPos landingBlock, Vec3d playerPos, Vec3d finalPos) {
+        // Block should be at or below player's current position
+        if (landingBlock.getY() > playerPos.y) {
+            MLGMaster.LOGGER.warn("Landing block {} is above player at Y={}", landingBlock, playerPos.y);
+            return false;
+        }
+
+        // Block should be reasonably close to the final position
+        double distanceToFinal = Math.sqrt(
+                Math.pow(landingBlock.getX() + 0.5 - finalPos.x, 2) +
+                        Math.pow(landingBlock.getZ() + 0.5 - finalPos.z, 2));
+
+        if (distanceToFinal > 2.0) { // Allow some tolerance
+            MLGMaster.LOGGER.warn("Landing block {} is too far from final position {}: {} blocks",
+                    landingBlock, finalPos, distanceToFinal);
+            return false;
+        }
+
+        // Final position should be close to the top of the landing block
+        double expectedY = landingBlock.getY() + 1.0; // Top of block
+        if (Math.abs(finalPos.y - expectedY) > 2.0) {
+            MLGMaster.LOGGER.warn("Final Y position {} is too far from landing block top {}",
+                    finalPos.y, expectedY);
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -101,8 +189,7 @@ public class FallPredictionSystem {
         boolean isDangerous = player.fallDistance >= MIN_DANGEROUS_FALL_DISTANCE;
 
         // Use physics engine for detailed analysis
-        MinecraftPhysics.FallingSpeedInfo speedInfo =
-                MinecraftPhysics.analyzeFallingSpeed(player, velocity);
+        MinecraftPhysics.FallingSpeedInfo speedInfo = MinecraftPhysics.analyzeFallingSpeed(player, velocity);
 
         boolean isHighSpeed = speedInfo.isNearTerminalVelocity();
         double remainingFallDistance = Math.max(0, playerPos.y);
@@ -110,8 +197,7 @@ public class FallPredictionSystem {
         // Estimate time to ground using physics
         double estimatedTimeToGround = 0;
         if (isFalling && remainingFallDistance > 0) {
-            estimatedTimeToGround =
-                    MinecraftPhysics.estimateTimeToFallDistance(remainingFallDistance, 100);
+            estimatedTimeToGround = MinecraftPhysics.estimateTimeToFallDistance(remainingFallDistance, 100);
         }
 
         return new FallAnalysisResult(isFalling, isDangerous, isHighSpeed, fallSpeed,
@@ -127,11 +213,18 @@ public class FallPredictionSystem {
         Vec3d velocity = player.getVelocity();
 
         // Run full physics simulation
-        MinecraftPhysics.MovementSimulationResult simulation =
-                MinecraftPhysics.simulatePlayerMovement(client, player, playerPos, velocity);
+        MinecraftPhysics.MovementSimulationResult simulation = MinecraftPhysics.simulatePlayerMovement(client, player,
+                playerPos, velocity);
 
         if (!simulation.hasCollision()) {
             return null; // No landing predicted
+        }
+
+        // Validate before creating result
+        CollisionValidation validation = validateCollisionResults(simulation, playerPos);
+        if (!validation.isValid()) {
+            MLGMaster.LOGGER.warn("PREDICTION VALIDATION FAILED: {}", validation.getReason());
+            return null;
         }
 
         return HitboxLandingResult.fromPhysicsSimulation(simulation, client, player, playerPos);
@@ -152,7 +245,6 @@ public class FallPredictionSystem {
         if (player.isOnGround()) {
             return new FallStateValidation(false, "On ground");
         }
-
         return new FallStateValidation(true, "Valid fall state");
     }
 
@@ -164,11 +256,11 @@ public class FallPredictionSystem {
         double groundHeight = targetBlock.getY() + 1.0; // Account for player height
         int ticksToImpact = simulation.getSimulationTicks();
 
-        // Calculate optimal placement timing
-        int optimalPlacementTick = Math.max(1, ticksToImpact - PLACEMENT_BUFFER_TICKS);
+        // More aggressive timing - place when we're very close to impact
+        int optimalPlacementTick = Math.max(0, ticksToImpact - PLACEMENT_BUFFER_TICKS);
 
         MLGMaster.LOGGER.debug(
-                "PHYSICS CALCULATION: Current height: {:.2f}, Ground height: {:.2f}, "
+                "PHYSICS CALCULATION: Current height: {}, Ground height: {}, "
                         + "Ticks to impact: {}, Optimal placement tick: {}",
                 currentHeight, groundHeight, ticksToImpact, optimalPlacementTick);
 
@@ -177,17 +269,18 @@ public class FallPredictionSystem {
     }
 
     private static void logTimingAnalysis(PlacementAnalysis timing, Vec3d playerPos,
-            BlockPos landingBlock, Vec3d velocity) {
+            BlockPos landingBlock, Vec3d velocity, MinecraftPhysics.MovementSimulationResult simulation) {
         double distanceToGround = playerPos.y - (landingBlock.getY() + 1.0);
 
         MLGMaster.LOGGER.info(
                 "TIMING ANALYSIS: Ticks to impact: {}, Optimal placement tick: {}, "
-                        + "Distance to ground: {:.2f} blocks",
-                timing.getTicksToImpact(), timing.getOptimalPlacementTick(), distanceToGround);
+                        + "Distance to ground: {} blocks, Final position: {}",
+                timing.getTicksToImpact(), timing.getOptimalPlacementTick(),
+                distanceToGround, simulation.getFinalPosition());
 
         if (timing.shouldPlaceNow()) {
             MLGMaster.LOGGER.info(
-                    "PLACEMENT DECISION: PLACING NOW - Reason: {}, Fall speed: {:.3f} b/t",
+                    "PLACEMENT DECISION: PLACING NOW - Reason: {}, Fall speed: {} b/t",
                     timing.getPlacementReason(), Math.abs(velocity.y));
         } else {
             MLGMaster.LOGGER.debug("PLACEMENT DECISION: WAITING - Reason: {}",
@@ -208,6 +301,24 @@ public class FallPredictionSystem {
         private final String reason;
 
         public FallStateValidation(boolean valid, String reason) {
+            this.valid = valid;
+            this.reason = reason;
+        }
+
+        public boolean isValid() {
+            return valid;
+        }
+
+        public String getReason() {
+            return reason;
+        }
+    }
+
+    private static class CollisionValidation {
+        private final boolean valid;
+        private final String reason;
+
+        public CollisionValidation(boolean valid, String reason) {
             this.valid = valid;
             this.reason = reason;
         }
@@ -246,14 +357,13 @@ public class FallPredictionSystem {
         }
 
         public String getPlacementReason() {
-            if (ticksToImpact <= PLACEMENT_BUFFER_TICKS) {
-                return String.format("Critical timing - %d ticks to impact", ticksToImpact);
+            if (ticksToImpact <= 0) {
+                return "Critical timing - impact imminent";
             } else if (ticksToImpact <= optimalPlacementTick) {
-                return String.format("Optimal timing - placing %d ticks before impact",
-                        ticksToImpact - optimalPlacementTick + PLACEMENT_BUFFER_TICKS);
+                return String.format("Optimal timing - %d ticks to impact", ticksToImpact);
             } else {
                 return String.format("Wait - %d ticks until optimal placement",
-                        optimalPlacementTick - ticksToImpact);
+                        ticksToImpact - optimalPlacementTick);
             }
         }
 
@@ -383,4 +493,3 @@ public class FallPredictionSystem {
         }
     }
 }
-
